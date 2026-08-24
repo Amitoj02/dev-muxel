@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GRID</title>
+    <!--
+      Nothing here is ever fetched from the network: the fonts are vendored and
+      the only content rendered is the user's own terminals. `style-src` keeps
+      'unsafe-inline' because xterm.js injects a <style> element at runtime for
+      its scrollbar theme, and Vite's dev server injects one for HMR. There is
+      no HTML-injection surface to protect: terminal output goes through xterm's
+      text nodes and notes live in a <textarea>.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

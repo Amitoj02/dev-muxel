@@ -1,0 +1,164 @@
+/*
+ * GRID design tokens.
+ *
+ * Taken verbatim from the Claude Design handoff ("Multi-repo CLI manager",
+ * prototype 1a + header 1d): a blue-black chassis with a 24px grid ruled into
+ * it, one signal red for anything that wants you, one soft green for clean and
+ * passing. Square corners everywhere. Space Grotesk for interface labels,
+ * JetBrains Mono for anything the machine wrote.
+ *
+ * Do not hard-code a hex anywhere else in the app — add a token here instead.
+ */
+
+:root {
+  /* --- chassis ------------------------------------------------------- */
+  --bg-chassis: #0b0e13;
+  --bg-pane: #10141b;
+  --bg-term: #0d1117;
+  --bg-header: #141922;
+  --bg-hover: #1b212b;
+  --bg-sunken: #0f131a;
+  --bg-chip: #1b212b;
+
+  --line: #1e242e;
+  --line-strong: #2b3442;
+  --line-focus: #3b4757;
+
+  /* --- ink ----------------------------------------------------------- */
+  --ink: #e6e9ef;
+  --ink-bright: #ffffff;
+  --ink-term: #b9c0cc;
+  --ink-2: #c3ccd8;
+  --ink-3: #9aa3b2;
+  --ink-muted: #8a93a3;
+  --ink-dim: #6b7484;
+  --ink-faint: #5b6472;
+  --ink-ghost: #3f4854;
+
+  /* --- signal -------------------------------------------------------- */
+  --red: #e5372a;
+  --red-light: #ff6b52;
+  --red-lighter: #ff8a75;
+  --red-wash: rgba(229, 55, 42, 0.12);
+  --red-wash-strong: rgba(229, 55, 42, 0.22);
+  --green: #62c08a;
+  --amber: #c9a227;
+
+  /* --- notes (warm variant of the chassis) --------------------------- */
+  --note-bg: #14140f;
+  --note-header: #1c1b14;
+  --note-line: #2a2818;
+  --note-line-focus: #4a4227;
+  --note-ink: #cfd4dd;
+
+  /* --- type ---------------------------------------------------------- */
+  --font-ui: 'Space Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* --- metrics ------------------------------------------------------- */
+  --titlebar-h: 38px;
+  --pane-header-h: 30px;
+  --statusbar-h: 24px;
+  --grid-rule: 24px;
+  --grid-rule-color: rgba(255, 255, 255, 0.045);
+
+  /* Live-tunable from settings; the design defaults are 6 / 26 / 26. */
+  --gutter: 6px;
+  --zoom-inset: 26px;
+  --glow: 26px;
+
+  /* --- motion -------------------------------------------------------- */
+  --ease-zoom: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --dur-zoom: 220ms;
+  --dur-tint: 160ms;
+
+  /* --- elevation ----------------------------------------------------- */
+  --shadow-zoom: 0 30px 90px rgba(0, 0, 0, 0.66);
+  --shadow-dialog: 0 40px 120px rgba(0, 0, 0, 0.72);
+  --scrim: rgba(8, 10, 14, 0.62);
+}
+
+/* Square corners are a rule of the system, not a default we inherited. */
+* {
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+@keyframes grid-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes grid-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(229, 55, 42, 0.55),
+      0 0 18px rgba(229, 55, 42, 0.22);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(229, 55, 42, 0.9),
+      0 0 var(--glow) rgba(229, 55, 42, 0.42);
+  }
+}
+
+@keyframes grid-attn {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 55, 42, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 9px rgba(229, 55, 42, 0);
+  }
+}
+
+@keyframes grid-zoomin {
+  from {
+    opacity: 0.4;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes grid-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes grid-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-zoom: 1ms;
+    --dur-tint: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

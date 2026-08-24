@@ -1,0 +1,182 @@
+/**
+ * Pane header — layout 1d from the handoff: one dense 30px line carrying the
+ * repo name, the branch, the working-tree counts and the pane's actions.
+ *
+ * It is also the drag handle. Pointer capture is used rather than HTML5 drag
+ * and drop so the drop zones can be drawn in the same coordinate space as the
+ * grid and so a drag never leaves a ghost image behind.
+ */
+
+import { useRef } from 'react'
+import type { GitState, Pane } from '../../../shared/types'
+import type { PaneRuntime } from '../state/hooks'
+import { IconBranch, IconClose, IconPlus, IconUnzoom, IconZoom } from './Icons'
+
+export type PaneHeaderProps = {
+  pane: Pane
+  label: string
+  git: GitState | null
+  runtime: PaneRuntime
+  shellLabel: string | null
+  zoomed: boolean
+  noteStatus?: string
+  onFocus: () => void
+  onZoom: () => void
+  onClose: () => void
+  onSplit?: () => void
+  onOpenEditor?: () => void
+  onDragStart: (e: React.PointerEvent) => void
+  onAnswer?: () => void
+}
+
+/** Spine colour: red when the pane wants you, green when the tree is clean. */
+function spineState(pane: Pane, git: GitState | null, runtime: PaneRuntime): string {
+  if (pane.kind === 'note') return 'note'
+  if (runtime.attention !== 'none') return 'alert'
+  if (git?.isRepo && git.dirty === 0 && git.conflicted === 0) return 'clean'
+  return 'idle'
+}
+
+export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
+  const { pane, git, runtime, zoomed } = props
+  const downAt = useRef<{ x: number; y: number } | null>(null)
+
+  // Only start a drag once the pointer has actually travelled; otherwise every
+  // click on the header would begin a drag and eat the focus click.
+  const onPointerDown = (e: React.PointerEvent): void => {
+    if (e.button !== 0) return
+    const target = e.target as HTMLElement
+    if (target.closest('button')) return
+    downAt.current = { x: e.clientX, y: e.clientY }
+    props.onFocus()
+  }
+
+  const onPointerMove = (e: React.PointerEvent): void => {
+    const start = downAt.current
+    if (!start) return
+    if (Math.abs(e.clientX - start.x) + Math.abs(e.clientY - start.y) < 5) return
+    downAt.current = null
+    props.onDragStart(e)
+  }
+
+  const onPointerUp = (): void => {
+    downAt.current = null
+  }
+
+  return (
+    <div
+      className="pane-header"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onDoubleClick={props.onZoom}
+    >
+      <span className="pane-header__spine" data-state={spineState(pane, git, runtime)} />
+      <span className="pane-header__name" title={pane.kind === 'terminal' ? pane.cwd : undefined}>
+        {props.label}
+      </span>
+
+      {pane.kind === 'terminal' ? (
+        <GitChips git={git} />
+      ) : (
+        <span className="note-status">{props.noteStatus}</span>
+      )}
+
+      <span className="pane-header__gap" />
+
+      {runtime.attention !== 'none' && (
+        <button className="badge-needs" onClick={props.onAnswer} title="Focus this pane">
+          NEEDS YOU
+        </button>
+      )}
+
+      {pane.kind === 'terminal' && props.shellLabel && (
+        <span className="pane-header__shell">{props.shellLabel}</span>
+      )}
+
+      {props.onOpenEditor && (
+        <button
+          className="pane-btn pane-btn--vs"
+          onClick={props.onOpenEditor}
+          title="Open this folder in VS Code"
+        >
+          VS
+        </button>
+      )}
+
+      {props.onSplit && (
+        <button
+          className="pane-btn pane-btn--split"
+          onClick={props.onSplit}
+          title="Another terminal on this folder"
+        >
+          <IconPlus />
+        </button>
+      )}
+
+      <button
+        className="pane-btn"
+        onClick={props.onZoom}
+        title={zoomed ? 'Back to the grid — Esc' : 'Fill the window — Ctrl+Alt+Z'}
+      >
+        {zoomed ? <IconUnzoom /> : <IconZoom />}
+      </button>
+
+      <button className="pane-btn pane-btn--close" onClick={props.onClose} title="Close this pane">
+        <IconClose />
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The git readout. Order and wording are from the design: a dirty count as a
+ * tinted chip, untracked as a neutral chip, then the ahead/behind pair.
+ */
+function GitChips({ git }: { git: GitState | null }): React.JSX.Element | null {
+  if (!git) return null
+
+  if (git.error) {
+    return <span className="chip chip--error">{git.error}</span>
+  }
+
+  if (!git.isRepo) {
+    return <span className="chip chip--error">not a repo</span>
+  }
+
+  const branch = git.detached
+    ? `detached ${git.head ?? ''}`.trim()
+    : (git.branch ?? git.head ?? '—')
+
+  return (
+    <>
+      <span className="pane-header__branch" title={git.upstream ? `tracking ${git.upstream}` : 'no upstream'}>
+        <IconBranch />
+        {branch}
+      </span>
+
+      {git.conflicted > 0 && <span className="chip chip--conflict">!{git.conflicted}</span>}
+
+      {git.dirty > 0 ? (
+        <span className="chip chip--dirty" title={`${git.staged} staged, ${git.modified} modified`}>
+          ●{git.dirty}
+        </span>
+      ) : git.untracked === 0 ? (
+        <span className="chip chip--clean">clean</span>
+      ) : null}
+
+      {git.untracked > 0 && (
+        <span className="chip chip--new" title={`${git.untracked} untracked`}>
+          +{git.untracked}
+        </span>
+      )}
+
+      {(git.ahead > 0 || git.behind > 0 || git.upstream) && (
+        <span className="chip chip--sync" title="ahead / behind upstream">
+          ↑{git.ahead} ↓{git.behind}
+        </span>
+      )}
+    </>
+  )
+}

@@ -1,0 +1,8 @@
+node_modules/
+out/
+dist/
+release/
+.electron-cache/
+.git-fixtures/
+*.tsbuildinfo
+.DS_Store

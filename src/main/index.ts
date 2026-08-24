@@ -1,0 +1,336 @@
+/**
+ * Main process entry.
+ *
+ * Owns everything the renderer is not allowed to touch: ptys, git, the
+ * filesystem, the window. The renderer owns the layout and pushes it here to
+ * be persisted. That split is the reason the renderer can stay sandboxed.
+ */
+
+import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron'
+import path from 'node:path'
+import os from 'node:os'
+import { CH, EV } from '../shared/ipc'
+import type { GitState, PersistedState, PtySpawnResult, Settings } from '../shared/types'
+import { buildMenu } from './menu'
+import { GitWatcher } from './git/watcher'
+import { probeRepo, scanForRepos } from './git/status'
+import { editorAvailable, openInEditor, openInFileManager } from './integrations/editor'
+import { PtyManager } from './pty/manager'
+import { discoverShells, mergeShells, pickDefaultShell } from './pty/shells'
+import { Store } from './store/store'
+import { createWindow, resolvePreload } from './window'
+
+// Must run before anything reads app.getPath('userData'), which cascades into
+// sessionData and logs.
+app.setName('GRID')
+
+// A second launch should raise the window you already have, not open a
+// duplicate grid fighting over the same state file.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+  process.exit(0)
+}
+
+let win: BrowserWindow | null = null
+let store: Store
+let gitWatcher: GitWatcher | null = null
+let quitting = false
+
+/**
+ * ConPTY's reflow behaviour depends on the Windows build, and xterm needs to
+ * be told the same number or it treats every wrapped line as hard-wrapped.
+ */
+const windowsBuildNumber = (): number => {
+  const m = /(\d+)\.(\d+)\.(\d+)/.exec(os.release())
+  return m ? Number(m[3]) : 0
+}
+
+const pty = new PtyManager({
+  onData: (paneId, data, seq) => {
+    win?.webContents.send(EV.ptyData, paneId, data, seq)
+  },
+  onExit: (paneId, exitCode, solicited) => {
+    win?.webContents.send(EV.ptyExit, paneId, exitCode, solicited)
+  }
+})
+
+// ---------------------------------------------------------------------------
+
+function registerIpc(): void {
+  ipcMain.handle(CH.stateLoad, async () => {
+    const state = store.get()
+    const shells = mergeShells(discoverShells(), state.shells)
+    // A default pointing at a shell this machine does not have would leave
+    // every new terminal dead on arrival.
+    if (!shells.some((s) => s.id === state.settings.defaultShellId)) {
+      state.settings.defaultShellId = pickDefaultShell(shells)
+    }
+    return { state, shells, buildNumber: windowsBuildNumber() }
+  })
+
+  ipcMain.handle(CH.stateSave, (_e, next: PersistedState) => {
+    store.set(next)
+    applyGitSettings(next)
+  })
+
+  ipcMain.handle(CH.settingsPatch, (_e, patch: Partial<Settings>) => {
+    const before = store.get().settings
+    const settings = store.patchSettings(patch)
+    // The renderer sends the whole settings object, so testing for the *presence*
+    // of a poll key would rebuild the watcher on every unrelated preference
+    // change — tearing down and re-creating an fs.watch per repo each time.
+    if (
+      gitWatcher &&
+      (before.gitPollFocused !== settings.gitPollFocused ||
+        before.gitPollBlurred !== settings.gitPollBlurred)
+    ) {
+      rebuildGitWatcher()
+    }
+    return settings
+  })
+
+  // --- pty ---------------------------------------------------------------
+
+  ipcMain.handle(
+    CH.ptySpawn,
+    (
+      _e,
+      req: { paneId: string; cwd: string; shellId: string; cols: number; rows: number }
+    ): PtySpawnResult => {
+      const state = store.get()
+      const shells = mergeShells(discoverShells(), state.shells)
+      const shell_ =
+        shells.find((s) => s.id === req.shellId) ??
+        shells.find((s) => s.id === state.settings.defaultShellId) ??
+        shells[0]
+
+      if (!shell_) return { ok: false, error: 'no shell is available on this machine' }
+
+      try {
+        const { pid, shellLabel } = pty.spawn(req.paneId, shell_, req.cwd, req.cols, req.rows)
+        return { ok: true, pid, shellLabel }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+  )
+
+  ipcMain.on(CH.ptyWrite, (_e, paneId: string, data: string) => pty.write(paneId, data))
+  ipcMain.on(CH.ptyResize, (_e, paneId: string, cols: number, rows: number) =>
+    pty.resize(paneId, cols, rows)
+  )
+  ipcMain.on(CH.ptyAck, (_e, paneId: string, bytes: number) => pty.ack(paneId, bytes))
+  ipcMain.on(CH.ptyKill, (_e, paneId: string) => pty.kill(paneId))
+
+  // --- git ---------------------------------------------------------------
+
+  ipcMain.handle(CH.gitRefresh, async (_e, target?: string) => {
+    if (target) await gitWatcher?.refreshOne(target)
+    else gitWatcher?.refreshAll()
+  })
+
+  ipcMain.handle(CH.gitSnapshot, (): Record<string, GitState> => gitWatcher?.snapshot() ?? {})
+
+  ipcMain.handle(CH.gitSetRepos, (_e, repos: Array<{ id: string; path: string }>) => {
+    gitWatcher?.setRepos(repos)
+  })
+
+  // --- dialogs / fs ------------------------------------------------------
+
+  ipcMain.handle(CH.dialogPickFolder, async (_e, title?: string) => {
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, {
+      title: title ?? 'Choose a folder',
+      properties: ['openDirectory', 'createDirectory'],
+      buttonLabel: 'Choose'
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return path.normalize(result.filePaths[0])
+  })
+
+  ipcMain.handle(CH.repoScan, async (_e, root: string) => {
+    const found = await scanForRepos(root)
+    return found.map((p) => ({
+      path: p,
+      name: path.basename(p),
+      alreadyAdded: false
+    }))
+  })
+
+  ipcMain.handle(CH.repoProbe, async (_e, target: string) => {
+    const probe = await probeRepo(target)
+    return {
+      isRepo: probe.isRepo,
+      isDirectory: probe.isDirectory,
+      root: probe.root,
+      name: probe.name,
+      worktree: probe.worktree
+    }
+  })
+
+  // --- integrations ------------------------------------------------------
+
+  ipcMain.handle(CH.openEditor, (_e, target: string) => openInEditor(target))
+  ipcMain.handle(CH.openFolder, (_e, target: string) => openInFileManager(target))
+  ipcMain.handle(CH.editorAvailable, () => editorAvailable())
+  ipcMain.handle(CH.openExternal, async (_e, url: string) => {
+    // Only ever hand the OS a web URL; a terminal can print anything, and
+    // shell.openExternal on a `file:` or custom scheme is an execution vector.
+    if (!/^https?:\/\//i.test(url)) return { ok: false, error: 'only http(s) links are opened' }
+    await shell.openExternal(url)
+    return { ok: true }
+  })
+
+  ipcMain.handle(CH.shellsList, () => mergeShells(discoverShells(), store.get().shells))
+
+  // --- window ------------------------------------------------------------
+
+  ipcMain.on(CH.winMinimise, () => win?.minimize())
+  ipcMain.on(CH.winToggleMaximise, () => {
+    if (!win) return
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+  })
+  ipcMain.on(CH.winClose, () => win?.close())
+  ipcMain.handle(CH.winIsMaximised, () => win?.isMaximized() ?? false)
+
+  /**
+   * Panes shout at the taskbar, not just at the in-app titlebar. The whole
+   * point of GRID is running agents while you do something else, so the moment
+   * that matters is the one where the window is *not* on top.
+   */
+  ipcMain.on(CH.winAttention, (_e, count: number) => {
+    if (!win || win.isDestroyed()) return
+    const waiting = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
+    win.setTitle(waiting > 0 ? `${waiting} waiting - GRID` : 'GRID')
+    // Flashing a focused window is just noise; Windows ignores it anyway.
+    win.flashFrame(waiting > 0 && !win.isFocused())
+  })
+
+  // --- clipboard ---------------------------------------------------------
+  // Electron 44 removes the clipboard module from the renderer, so it is
+  // bridged from here rather than used directly on the other side.
+
+  ipcMain.handle(CH.clipboardWrite, (_e, text: string) => {
+    clipboard.writeText(String(text ?? ''))
+  })
+  ipcMain.handle(CH.clipboardRead, () => clipboard.readText())
+}
+
+// ---------------------------------------------------------------------------
+
+function applyGitSettings(state: PersistedState): void {
+  gitWatcher?.setRepos(state.repos.map((r) => ({ id: r.id, path: r.path })))
+}
+
+function rebuildGitWatcher(): void {
+  const settings = store.get().settings
+  const repos = store.get().repos.map((r) => ({ id: r.id, path: r.path }))
+  gitWatcher?.dispose()
+  // Carry the focus state across: a fresh watcher defaulting to "focused"
+  // would quietly put a background window back on the 5s poll.
+  const focused = win?.isFocused() ?? true
+  gitWatcher = new GitWatcher(
+    {
+      focusedIntervalMs: settings.gitPollFocused,
+      blurredIntervalMs: settings.gitPollBlurred,
+      onUpdate: (repoPath, gitState) => {
+        win?.webContents.send(EV.gitState, repoPath, gitState)
+      }
+    },
+    focused
+  )
+  gitWatcher.setRepos(repos)
+}
+
+// ---------------------------------------------------------------------------
+
+app.on('second-instance', () => {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.focus()
+})
+
+// Never `await app.whenReady()` at module top level in ESM — the ready event
+// cannot fire until the entry module finishes evaluating, so it deadlocks.
+app.whenReady().then(async () => {
+  store = new Store(app.getPath('userData'))
+  await store.load()
+
+  // The renderer loads nothing remote and asks for nothing; deny outright
+  // rather than relying on there being no code that would request it.
+  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
+    callback(false)
+  )
+
+  registerIpc()
+  rebuildGitWatcher()
+  // The menu is never drawn (the window is frameless); it exists to own the
+  // keyboard accelerators, which fire before the key reaches the renderer.
+  buildMenu(() => win)
+
+  win = createWindow({
+    preload: resolvePreload(__dirname),
+    devServerUrl: process.env.ELECTRON_RENDERER_URL ?? null,
+    rendererHtml: path.join(__dirname, '../renderer/index.html'),
+    bounds: store.getBounds(),
+    onBoundsChanged: (bounds) => store.setBounds(bounds)
+  })
+
+  win.on('focus', () => {
+    gitWatcher?.setFocused(true)
+    win?.flashFrame(false)
+    win?.webContents.send(EV.winFocus, true)
+  })
+  win.on('blur', () => {
+    gitWatcher?.setFocused(false)
+    win?.webContents.send(EV.winFocus, false)
+  })
+  win.on('maximize', () => win?.webContents.send(EV.winMaximised, true))
+  win.on('unmaximize', () => win?.webContents.send(EV.winMaximised, false))
+
+  win.on('closed', () => {
+    win = null
+  })
+
+  // Electron 43 changed this to a single details object; the old five-argument
+  // handler silently logs nothing useful.
+  win.webContents.on('console-message', ({ level, message, sourceId, lineNumber }) => {
+    if (level === 'error' || level === 'warning') {
+      console.log(`[renderer ${level}] ${message} (${sourceId}:${lineNumber})`)
+    }
+  })
+})
+
+/**
+ * Quitting is deferred by one beat so the last layout change actually reaches
+ * disk. The renderer saves continuously, but "start where it ended" is the
+ * whole point of the session, and a fire-and-forget write on the way out races
+ * process exit.
+ */
+app.on('before-quit', (event) => {
+  if (quitting) return
+  quitting = true
+  event.preventDefault()
+
+  win?.webContents.send(EV.appBeforeQuit)
+  pty.killAll(true)
+  gitWatcher?.dispose()
+  gitWatcher = null
+
+  // Long enough for the renderer's final save() to arrive over IPC.
+  setTimeout(() => {
+    void store
+      ?.flush()
+      .catch((err) => console.error('[main] final save failed:', err))
+      .finally(() => app.exit(0))
+  }, 150)
+})
+
+app.on('window-all-closed', () => {
+  if (!quitting) app.quit()
+})
+
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaught:', err)
+})

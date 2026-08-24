@@ -1,0 +1,63 @@
+appId: me.sanjeet.grid
+productName: GRID
+copyright: Copyright (c) 2026 Sanjeet
+
+directories:
+  buildResources: build
+  output: release/${version}
+
+files:
+  - out/**/*
+  - package.json
+  - licenses/**
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!scripts/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!electron-builder.yml'
+  - '!eslint.config.{js,mjs,cjs}'
+  - '!{.env,.env.*,.npmrc,package-lock.json}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,tsconfig.tsbuildinfo}'
+  # node-pty's package is 62MB, 53MB of which is .pdb debug symbols, plus
+  # prebuilds for platforms this app will never run on. Dropping them takes
+  # app.asar.unpacked from ~62MB to ~5MB.
+  - '!node_modules/node-pty/prebuilds/*/*.pdb'
+  - '!node_modules/node-pty/prebuilds/darwin-*/**'
+  - '!node_modules/node-pty/prebuilds/linux-*/**'
+  - '!node_modules/node-pty/{src,deps,scripts}/**'
+
+asar: true
+
+# node-pty loads pty.node / conpty.node through a *dynamic relative require*,
+# and spawns winpty-agent.exe / OpenConsole.exe as real child processes. None of
+# that works from inside app.asar, so the whole package has to be unpacked -
+# not just the .node files.
+asarUnpack:
+  - node_modules/node-pty/**
+
+# node-pty 1.1.0 ships N-API prebuilds, and N-API is ABI-stable across Node and
+# Electron, so there is nothing to rebuild. This is also load-bearing on
+# machines without a Windows SDK, where @electron/rebuild simply cannot run.
+npmRebuild: false
+
+electronDownload:
+  cache: .electron-cache
+
+win:
+  executableName: GRID
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  shortcutName: GRID
+  artifactName: ${name}-${version}-setup.${ext}
+
+portable:
+  artifactName: ${name}-${version}-portable.${ext}

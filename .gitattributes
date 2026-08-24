@@ -1,0 +1,10 @@
+# Normalise text in the repository, check out with native endings.
+* text=auto
+
+# Windows-only launcher: it must keep CRLF wherever it is checked out.
+*.cmd text eol=crlf
+
+# Fonts, icons and lockfile-adjacent binaries.
+*.woff2 binary
+*.ico   binary
+*.png   binary

@@ -1,0 +1,65 @@
+{
+  "name": "grid",
+  "version": "1.0.0",
+  "description": "A tiling grid of terminals, one per repository, for vibe coding several projects at once",
+  "main": "./out/main/index.js",
+  "private": true,
+  "author": "Sanjeet",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "install-electron",
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "start": "electron-vite preview",
+    "build:win": "npm run icon && npm run build && electron-builder --win",
+    "build:unpacked": "npm run icon && npm run build && electron-builder --win --dir",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck:node": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "fonts": "node scripts/fetch-fonts.mjs",
+    "fixtures:git": "bash scripts/make-git-fixtures.sh .git-fixtures",
+    "check:git": "node --experimental-strip-types --no-warnings scripts/check-git.mts",
+    "check:layout": "node --experimental-strip-types --no-warnings scripts/check-layout.mts",
+    "check": "npm run check:layout && npm run check:git",
+    "icon": "node scripts/make-icon.mjs"
+  },
+  "dependencies": {
+    "node-pty": "1.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.3.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.0",
+    "@xterm/addon-clipboard": "0.2.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/addon-search": "0.16.0",
+    "@xterm/addon-unicode11": "0.9.0",
+    "@xterm/addon-web-links": "0.12.0",
+    "@xterm/addon-webgl": "0.19.0",
+    "@xterm/xterm": "6.0.0",
+    "electron": "43.4.1",
+    "electron-builder": "26.15.7",
+    "electron-vite": "5.0.0",
+    "eslint": "10.9.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "^17.11.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
+    "vite": "8.2.2"
+  },
+  "overrides": {
+    "electron-vite": {
+      "vite": "$vite"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Amitoj02/grid-cli.git"
+  }
+}

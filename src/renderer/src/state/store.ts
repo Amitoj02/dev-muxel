@@ -1,0 +1,610 @@
+/**
+ * The renderer's single source of truth.
+ *
+ * A hand-rolled external store rather than a state library: the whole app is
+ * one object, updates are coarse, and `useSyncExternalStore` gives us tearing-
+ * free reads for free. One less dependency to keep in step with React.
+ *
+ * The renderer owns layout / panes / repos / notes / settings and pushes the
+ * whole lot at the main process to be written to disk, debounced. The main
+ * process owns ptys, git and the filesystem. Nothing crosses that line.
+ */
+
+import type {
+  DockSide,
+  GitState,
+  LayoutNode,
+  Note,
+  Pane,
+  PersistedState,
+  Repo,
+  Settings,
+  ShellProfile,
+  TerminalPane
+} from '../../../shared/types'
+import {
+  autoAppend,
+  collectPaneIds,
+  evenOut,
+  measure,
+  movePane,
+  normalise,
+  removePane,
+  resizeSplit,
+  splitPane,
+  swapPanes,
+  type Rect
+} from '../../../shared/layout'
+
+// ---------------------------------------------------------------------------
+
+export type PaneRuntime = {
+  /** Set once the pty is alive. */
+  pid: number | null
+  shellLabel: string | null
+  /** Process has exited; the pane shows a dead state until it is closed or restarted. */
+  exited: boolean
+  exitCode: number | null
+  /** The pane wants the user: bell rang, or it went quiet mid-task. */
+  attention: 'none' | 'bell' | 'idle'
+  /** Output is currently flowing. */
+  busy: boolean
+  /** Wall-clock ms the attention state started, for the "waiting · 40s" label. */
+  attentionSince: number | null
+  /** Last title the shell reported via OSC 0/2. */
+  title: string | null
+}
+
+export type Overlay =
+  | { kind: 'none' }
+  | { kind: 'repositories' }
+  | { kind: 'notes' }
+  | { kind: 'settings' }
+  | { kind: 'shortcuts' }
+  | { kind: 'confirm-close'; paneId: string }
+
+export type AppState = {
+  ready: boolean
+  /**
+   * Windows build number, from the main process. xterm needs it to know
+   * whether this ConPTY reflows on resize.
+   */
+  buildNumber: number
+  settings: Settings
+  repos: Repo[]
+  notes: Note[]
+  shells: ShellProfile[]
+  layout: LayoutNode | null
+  panes: Pane[]
+  focusedPaneId: string | null
+  /** Last terminal pane to hold focus — where a note's "send" lands. */
+  lastTerminalPaneId: string | null
+  zoomedPaneId: string | null
+  /** Keyed by normalised repo path. */
+  git: Record<string, GitState>
+  runtime: Record<string, PaneRuntime>
+  overlay: Overlay
+  /** Pane being dragged by its header, if any. */
+  dragging: string | null
+  /** Live drop target while dragging. */
+  dropTarget: { paneId: string; side: DockSide | 'center' } | null
+  /**
+   * Panes that came back from the last session rather than being opened just
+   * now. Used to honour `restoreRunsStartup`: reopening the app should not
+   * silently re-run a command in every repository unless you asked for that.
+   */
+  restoredPaneIds: ReadonlySet<string>
+  /** Measured content box of the grid, container-local px. */
+  gridBox: Rect
+  /** Transient toast, cleared by the UI. */
+  toast: { id: number; text: string; tone: 'info' | 'error' } | null
+}
+
+const emptyRuntime: PaneRuntime = {
+  pid: null,
+  shellLabel: null,
+  exited: false,
+  exitCode: null,
+  attention: 'none',
+  busy: false,
+  attentionSince: null,
+  title: null
+}
+
+// ---------------------------------------------------------------------------
+
+type Listener = () => void
+
+let state: AppState = {
+  ready: false,
+  buildNumber: 0,
+  settings: {} as Settings,
+  repos: [],
+  notes: [],
+  shells: [],
+  layout: null,
+  panes: [],
+  focusedPaneId: null,
+  lastTerminalPaneId: null,
+  zoomedPaneId: null,
+  git: {},
+  runtime: {},
+  overlay: { kind: 'none' },
+  dragging: null,
+  dropTarget: null,
+  restoredPaneIds: new Set<string>(),
+  gridBox: { x: 0, y: 0, width: 0, height: 0 },
+  toast: null
+}
+
+const listeners = new Set<Listener>()
+
+export function subscribe(fn: Listener): () => void {
+  listeners.add(fn)
+  return () => listeners.delete(fn)
+}
+
+export function getState(): AppState {
+  return state
+}
+
+function set(patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)): void {
+  const next = typeof patch === 'function' ? patch(state) : patch
+  let changed = false
+  for (const key of Object.keys(next) as Array<keyof AppState>) {
+    if (state[key] !== next[key]) {
+      changed = true
+      break
+    }
+  }
+  if (!changed) return
+  state = { ...state, ...next }
+  for (const fn of listeners) fn()
+}
+
+// ---------------------------------------------------------------------------
+// ids
+// ---------------------------------------------------------------------------
+
+let seq = 0
+export function newId(prefix: string): string {
+  seq += 1
+  return `${prefix}_${Date.now().toString(36)}${seq.toString(36)}`
+}
+
+// ---------------------------------------------------------------------------
+// derived
+// ---------------------------------------------------------------------------
+
+export function paneById(s: AppState, paneId: string | null): Pane | null {
+  if (!paneId) return null
+  return s.panes.find((p) => p.id === paneId) ?? null
+}
+
+export function repoById(s: AppState, repoId: string | null | undefined): Repo | null {
+  if (!repoId) return null
+  return s.repos.find((r) => r.id === repoId) ?? null
+}
+
+export function noteById(s: AppState, noteId: string): Note | null {
+  return s.notes.find((n) => n.id === noteId) ?? null
+}
+
+export function gitFor(s: AppState, pane: Pane | null): GitState | null {
+  if (!pane || pane.kind !== 'terminal') return null
+  const key = normalisePath(pane.cwd)
+  return s.git[key] ?? null
+}
+
+export function runtimeFor(s: AppState, paneId: string): PaneRuntime {
+  return s.runtime[paneId] ?? emptyRuntime
+}
+
+export function attentionCount(s: AppState): number {
+  return Object.entries(s.runtime).filter(
+    ([paneId, r]) => r.attention !== 'none' && paneId !== s.focusedPaneId
+  ).length
+}
+
+/** Windows paths are case-insensitive; the git map is keyed on a stable form. */
+export function normalisePath(p: string): string {
+  if (!p) return ''
+  return p.replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase()
+}
+
+export function shellById(s: AppState, id: string | undefined): ShellProfile | null {
+  if (!id) return null
+  return s.shells.find((sh) => sh.id === id) ?? null
+}
+
+/** Label shown in a pane header: user label, then repo name, then folder name. */
+export function paneLabel(s: AppState, pane: Pane): string {
+  if (pane.kind === 'note') {
+    return noteById(s, pane.noteId)?.title ?? 'note'
+  }
+  if (pane.label) return pane.label
+  const repo = repoById(s, pane.repoId)
+  if (repo) return repo.name
+  const parts = pane.cwd.replace(/[\\/]+$/, '').split(/[\\/]/)
+  return parts[parts.length - 1] || pane.cwd
+}
+
+// ---------------------------------------------------------------------------
+// hydration
+// ---------------------------------------------------------------------------
+
+export function hydrate(
+  persisted: PersistedState,
+  shells: ShellProfile[],
+  buildNumber: number
+): void {
+  // "Reopen the last layout on launch" is a setting; honour it rather than
+  // always restoring and leaving the checkbox as decoration.
+  const restore = persisted.settings.restoreSession !== false
+  const panes = restore ? (persisted.session.panes ?? []) : []
+  const layout = restore ? normalise(persisted.session.layout) : null
+
+  // Drop anything the layout references but the pane list lost, and vice
+  // versa: a half-written state file should still open into a usable grid.
+  const inLayout = new Set(collectPaneIds(layout))
+  const keptPanes = panes.filter((p) => inLayout.has(p.id))
+  const known = new Set(keptPanes.map((p) => p.id))
+  let repaired: LayoutNode | null = layout
+  for (const paneId of inLayout) {
+    if (!known.has(paneId)) repaired = removePane(repaired, paneId)
+  }
+
+  const runtime: Record<string, PaneRuntime> = {}
+  for (const p of keptPanes) runtime[p.id] = { ...emptyRuntime }
+
+  set({
+    ready: true,
+    buildNumber,
+    restoredPaneIds: new Set(keptPanes.map((p) => p.id)),
+    settings: persisted.settings,
+    repos: persisted.repos,
+    notes: persisted.notes,
+    shells,
+    layout: repaired,
+    panes: keptPanes,
+    focusedPaneId:
+      persisted.session.focusedPaneId && known.has(persisted.session.focusedPaneId)
+        ? persisted.session.focusedPaneId
+        : (keptPanes[0]?.id ?? null),
+    zoomedPaneId: null,
+    runtime
+  })
+}
+
+/** The slice that gets written to disk. */
+export function toPersisted(s: AppState): PersistedState {
+  return {
+    version: 1,
+    settings: s.settings,
+    repos: s.repos,
+    notes: s.notes,
+    shells: s.shells.filter((sh) => !sh.builtin),
+    session: {
+      layout: s.layout,
+      panes: s.panes,
+      focusedPaneId: s.focusedPaneId,
+      zoomedPaneId: null
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// actions
+// ---------------------------------------------------------------------------
+
+export const actions = {
+  setGridBox(box: Rect): void {
+    const cur = state.gridBox
+    if (cur.width === box.width && cur.height === box.height && cur.x === box.x && cur.y === box.y) {
+      return
+    }
+    set({ gridBox: box })
+  },
+
+  focusPane(paneId: string | null): void {
+    if (state.focusedPaneId === paneId) return
+    const pane = paneById(state, paneId)
+    set({
+      focusedPaneId: paneId,
+      lastTerminalPaneId:
+        pane?.kind === 'terminal' ? pane.id : state.lastTerminalPaneId
+    })
+    if (paneId) actions.clearAttention(paneId)
+  },
+
+  // --- panes -------------------------------------------------------------
+
+  addTerminal(opts: { repoId?: string | null; cwd?: string; shellId?: string } = {}): string | null {
+    const repo = repoById(state, opts.repoId ?? null)
+    const cwd = opts.cwd ?? repo?.path
+    if (!cwd) return null
+
+    const shellId = opts.shellId ?? repo?.shellId ?? state.settings.defaultShellId
+    const pane: TerminalPane = {
+      id: newId('pane'),
+      kind: 'terminal',
+      repoId: repo?.id ?? null,
+      cwd,
+      shellId,
+      startupCommand: repo?.startupCommand
+    }
+
+    set((s) => ({
+      panes: [...s.panes, pane],
+      layout: autoAppend(s.layout, pane.id, s.gridBox, s.settings.gutter),
+      focusedPaneId: pane.id,
+      runtime: { ...s.runtime, [pane.id]: { ...emptyRuntime } },
+      zoomedPaneId: null
+    }))
+    return pane.id
+  },
+
+  /**
+   * "+ Terminal" with no folder chosen: reuse the focused pane's repo, else
+   * the first declared repo. With nothing declared yet, send the user to the
+   * repository manager rather than opening a shell in some arbitrary folder.
+   */
+  addTerminalSmart(): void {
+    const focused = paneById(state, state.focusedPaneId)
+    if (focused && focused.kind === 'terminal') {
+      actions.addTerminal({ repoId: focused.repoId, cwd: focused.cwd, shellId: focused.shellId })
+      return
+    }
+    const repo = state.repos[0]
+    if (repo) {
+      actions.addTerminal({ repoId: repo.id })
+      return
+    }
+    actions.showOverlay({ kind: 'repositories' })
+  },
+
+  /** Split an existing pane, opening a second terminal on the same folder. */
+  splitFrom(paneId: string, side: DockSide = 'right'): string | null {
+    const source = paneById(state, paneId)
+    if (!source || source.kind !== 'terminal') return null
+
+    const pane: TerminalPane = {
+      id: newId('pane'),
+      kind: 'terminal',
+      repoId: source.repoId,
+      cwd: source.cwd,
+      shellId: source.shellId,
+      startupCommand: undefined
+    }
+
+    set((s) => ({
+      panes: [...s.panes, pane],
+      layout: splitPane(s.layout, paneId, side, pane.id),
+      focusedPaneId: pane.id,
+      runtime: { ...s.runtime, [pane.id]: { ...emptyRuntime } },
+      zoomedPaneId: null
+    }))
+    return pane.id
+  },
+
+  addNote(opts: { title?: string; body?: string } = {}): string {
+    const note: Note = {
+      id: newId('note'),
+      title: opts.title ?? nextNoteTitle(state.notes),
+      body: opts.body ?? '',
+      updatedAt: Date.now()
+    }
+    const pane: Pane = { id: newId('pane'), kind: 'note', noteId: note.id }
+
+    set((s) => ({
+      notes: [...s.notes, note],
+      panes: [...s.panes, pane],
+      layout: autoAppend(s.layout, pane.id, s.gridBox, s.settings.gutter),
+      focusedPaneId: pane.id,
+      runtime: { ...s.runtime, [pane.id]: { ...emptyRuntime } },
+      zoomedPaneId: null
+    }))
+    return pane.id
+  },
+
+  /** Open an existing note in a new pane, or focus it if already on screen. */
+  openNote(noteId: string): void {
+    const existing = state.panes.find((p) => p.kind === 'note' && p.noteId === noteId)
+    if (existing) {
+      actions.focusPane(existing.id)
+      return
+    }
+    const pane: Pane = { id: newId('pane'), kind: 'note', noteId }
+    set((s) => ({
+      panes: [...s.panes, pane],
+      layout: autoAppend(s.layout, pane.id, s.gridBox, s.settings.gutter),
+      focusedPaneId: pane.id,
+      runtime: { ...s.runtime, [pane.id]: { ...emptyRuntime } },
+      // Otherwise the new pane is focused but hidden behind the zoom scrim.
+      zoomedPaneId: null
+    }))
+  },
+
+  closePane(paneId: string): void {
+    set((s) => {
+      const layout = removePane(s.layout, paneId)
+      const panes = s.panes.filter((p) => p.id !== paneId)
+      const runtime = { ...s.runtime }
+      delete runtime[paneId]
+      const remaining = collectPaneIds(layout)
+      return {
+        layout,
+        panes,
+        runtime,
+        focusedPaneId:
+          s.focusedPaneId === paneId ? (remaining[remaining.length - 1] ?? null) : s.focusedPaneId,
+        zoomedPaneId: s.zoomedPaneId === paneId ? null : s.zoomedPaneId,
+        overlay: s.overlay.kind === 'confirm-close' ? { kind: 'none' } : s.overlay
+      }
+    })
+  },
+
+  toggleZoom(paneId: string): void {
+    set((s) => ({
+      zoomedPaneId: s.zoomedPaneId === paneId ? null : paneId,
+      focusedPaneId: paneId
+    }))
+  },
+
+  closeZoom(): void {
+    if (state.zoomedPaneId) set({ zoomedPaneId: null })
+  },
+
+  // --- layout ------------------------------------------------------------
+
+  resize(splitId: string, index: number, deltaFraction: number): void {
+    set((s) => ({ layout: resizeSplit(s.layout, splitId, index, deltaFraction) }))
+  },
+
+  evenOut(): void {
+    set((s) => ({ layout: evenOut(s.layout) }))
+  },
+
+  beginDrag(paneId: string): void {
+    set({ dragging: paneId, zoomedPaneId: null })
+  },
+
+  setDropTarget(target: AppState['dropTarget']): void {
+    const cur = state.dropTarget
+    if (cur?.paneId === target?.paneId && cur?.side === target?.side) return
+    set({ dropTarget: target })
+  },
+
+  endDrag(commit: boolean): void {
+    const { dragging, dropTarget } = state
+    if (commit && dragging && dropTarget && dropTarget.paneId !== dragging) {
+      if (dropTarget.side === 'center') {
+        set((s) => ({ layout: swapPanes(s.layout, dragging, dropTarget.paneId) }))
+      } else {
+        set((s) => ({
+          layout: movePane(s.layout, dragging, dropTarget.paneId, dropTarget.side as DockSide)
+        }))
+      }
+      set({ focusedPaneId: dragging })
+    }
+    set({ dragging: null, dropTarget: null })
+  },
+
+  // --- repos -------------------------------------------------------------
+
+  addRepo(repo: Omit<Repo, 'id'>): Repo | null {
+    const key = normalisePath(repo.path)
+    if (!key) return null
+    const existing = state.repos.find((r) => normalisePath(r.path) === key)
+    if (existing) return existing
+    const next: Repo = { ...repo, id: newId('repo') }
+    set((s) => ({ repos: [...s.repos, next] }))
+    return next
+  },
+
+  updateRepo(id: string, patch: Partial<Repo>): void {
+    set((s) => ({ repos: s.repos.map((r) => (r.id === id ? { ...r, ...patch } : r)) }))
+  },
+
+  removeRepo(id: string): void {
+    set((s) => ({
+      repos: s.repos.filter((r) => r.id !== id),
+      // Panes stay open on their folder; they just stop being tied to a repo.
+      panes: s.panes.map((p) => (p.kind === 'terminal' && p.repoId === id ? { ...p, repoId: null } : p))
+    }))
+  },
+
+
+  setGit(path: string, git: GitState): void {
+    set((s) => ({ git: { ...s.git, [normalisePath(path)]: git } }))
+  },
+
+  setGitSnapshot(snapshot: Record<string, GitState>): void {
+    const next: Record<string, GitState> = {}
+    for (const [k, v] of Object.entries(snapshot)) next[normalisePath(k)] = v
+    set({ git: next })
+  },
+
+  // --- notes -------------------------------------------------------------
+
+  updateNote(noteId: string, patch: Partial<Omit<Note, 'id'>>): void {
+    set((s) => ({
+      notes: s.notes.map((n) =>
+        n.id === noteId ? { ...n, ...patch, updatedAt: Date.now() } : n
+      )
+    }))
+  },
+
+  deleteNote(noteId: string): void {
+    set((s) => ({ notes: s.notes.filter((n) => n.id !== noteId) }))
+  },
+
+  // --- runtime -----------------------------------------------------------
+
+  patchRuntime(paneId: string, patch: Partial<PaneRuntime>): void {
+    set((s) => {
+      const cur = s.runtime[paneId] ?? emptyRuntime
+      let same = true
+      for (const key of Object.keys(patch) as Array<keyof PaneRuntime>) {
+        if (cur[key] !== patch[key]) {
+          same = false
+          break
+        }
+      }
+      if (same) return {}
+      return { runtime: { ...s.runtime, [paneId]: { ...cur, ...patch } } }
+    })
+  },
+
+  raiseAttention(paneId: string, kind: 'bell' | 'idle'): void {
+    // A bell outranks an idle guess and should not be downgraded by one.
+    const cur = runtimeFor(state, paneId)
+    if (cur.attention === 'bell' && kind === 'idle') return
+    if (state.focusedPaneId === paneId && state.zoomedPaneId !== null) return
+    actions.patchRuntime(paneId, { attention: kind, attentionSince: Date.now() })
+  },
+
+  clearAttention(paneId: string): void {
+    const cur = runtimeFor(state, paneId)
+    if (cur.attention === 'none') return
+    actions.patchRuntime(paneId, { attention: 'none', attentionSince: null })
+  },
+
+  // --- settings / chrome -------------------------------------------------
+
+  patchSettings(patch: Partial<Settings>): void {
+    set((s) => ({ settings: { ...s.settings, ...patch } }))
+  },
+
+  setShells(shells: ShellProfile[]): void {
+    set({ shells })
+  },
+
+  showOverlay(overlay: Overlay): void {
+    set({ overlay })
+  },
+
+  closeOverlay(): void {
+    if (state.overlay.kind !== 'none') set({ overlay: { kind: 'none' } })
+  },
+
+  toast(text: string, tone: 'info' | 'error' = 'info'): void {
+    set({ toast: { id: Date.now(), text, tone } })
+  },
+
+  clearToast(): void {
+    if (state.toast) set({ toast: null })
+  }
+}
+
+function nextNoteTitle(notes: Note[]): string {
+  if (!notes.some((n) => n.title === 'scratch')) return 'scratch'
+  let i = 2
+  while (notes.some((n) => n.title === `scratch ${i}`)) i += 1
+  return `scratch ${i}`
+}
+
+/** Rects for the current layout, recomputed whenever geometry inputs change. */
+export function currentMeasure(s: AppState): ReturnType<typeof measure> {
+  return measure(s.layout, s.gridBox, s.settings.gutter ?? 6)
+}
