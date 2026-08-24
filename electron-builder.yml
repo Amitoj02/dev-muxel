@@ -55,8 +55,16 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  # Uninstalling should not take your declared repositories and notes with it.
   deleteAppDataOnUninstall: false
   shortcutName: GRID
+  # Explicit rather than relying on the defaults: these two are the whole point
+  # of installing rather than running from the build folder.
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  menuCategory: false
+  runAfterFinish: false
+  allowElevation: false
   artifactName: ${name}-${version}-setup.${ext}
 
 portable:

@@ -12,28 +12,34 @@ Windows only. Electron + xterm.js + ConPTY.
 
 ---
 
-## Running it
+## Installing it
 
 ```bash
 npm install
-npm run dev        # dev server with hot reload
+npm run build:win
 ```
 
-For daily use, build once and launch through `grid.cmd`:
+That produces two things in `release/<version>/`:
+
+| | |
+|---|---|
+| `grid-1.0.0-setup.exe` | installs to `%LOCALAPPDATA%\Programs\GRID`, adds Start Menu and desktop shortcuts, and registers in Apps & Features |
+| `grid-1.0.0-portable.exe` | single file, no install, no shortcuts |
+
+The installer is per-user, so it never asks for admin. Uninstalling leaves your
+declared repositories and notes alone — they live in `%APPDATA%\GRID`.
+
+If Windows Smart App Control blocks the unsigned build (see
+[Caveats](#caveats)), `grid.cmd` runs the same app through Electron's own signed
+binary instead.
+
+### Working on it
 
 ```bash
-npm run build
-```
-
-Then double-click **`grid.cmd`** (or pin a shortcut to it). It runs the built
-app through Electron's own signed binary, which sidesteps Windows Smart App
-Control — see [Caveats](#caveats).
-
-To produce an installer instead:
-
-```bash
-npm run build:win        # release/1.0.0/grid-1.0.0-setup.exe + portable exe
-npm run build:unpacked   # release/1.0.0/win-unpacked/GRID.exe, no installer
+npm run dev              # dev server with hot reload
+npm run build            # typecheck + bundle to out/
+npm run build:unpacked   # release/<version>/win-unpacked/GRID.exe, no installer
+npm run icon             # regenerate build/icon.ico from scripts/make-icon.mjs
 ```
 
 ---
@@ -109,7 +115,7 @@ src/shared/     types, the IPC channel list, and the pure layout engine
 src/main/       ptys, git, the filesystem, the window, menu accelerators
 src/preload/    the contextBridge — a fixed, typed list of verbs
 src/renderer/   React 19; owns layout/panes/repos/notes/settings
-scripts/        checks and the font vendoring script
+scripts/        checks, the icon generator and the font vendoring script
 ```
 
 The renderer owns the application state and pushes the whole blob at main to be
