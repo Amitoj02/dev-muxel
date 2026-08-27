@@ -48,12 +48,17 @@ const CTRL_ALT_KEYS = new Set([
   'arrowdown'
 ])
 
-/** Ctrl+Shift chords, handled against the focused terminal itself. */
+/**
+ * Ctrl+Shift chords. Most act on the focused terminal itself; `t` is the one
+ * exception, and belongs to the app — it is the browser's own "bring back what
+ * I just closed", which is exactly what it does here.
+ */
 const CTRL_SHIFT_KEYS = new Set([
   'c', // copy selection
   'v', // paste
   'f', // find
-  'k' // clear
+  'k', // clear
+  't' // reopen the pane just closed
 ])
 
 /** Plain Ctrl chords. Only the universal zoom keys, which no CLI binds. */

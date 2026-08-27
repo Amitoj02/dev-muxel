@@ -73,6 +73,48 @@ export function findLeaf(node: LayoutNode | null, paneId: string): LayoutNode | 
   return null
 }
 
+/**
+ * Which pane a leaf sits next to, and which side of that pane it is on.
+ *
+ * This is the address a closed pane needs in order to come back to roughly
+ * where it was once the tree has moved on without it: feeding the result to
+ * `splitPane` puts it back in the same slot and the same order. When the
+ * neighbour is itself a split, the nearest leaf inside it is used, which is
+ * the closest thing to "next to" that a single pane id can express.
+ */
+export function anchorFor(
+  root: LayoutNode | null,
+  paneId: string
+): { paneId: string; side: DockSide } | null {
+  if (!root || root.kind === 'leaf') return null
+
+  const stack: LayoutSplit[] = [root]
+  while (stack.length > 0) {
+    const node = stack.pop()
+    if (!node) break
+
+    const idx = node.children.findIndex((c) => c.kind === 'leaf' && c.paneId === paneId)
+    if (idx !== -1) {
+      // Prefer the sibling after it, so the restored pane keeps its order.
+      const after = idx + 1 < node.children.length
+      const sibling = after ? node.children[idx + 1] : node.children[idx - 1]
+      if (!sibling) return null
+      const ids = collectPaneIds(sibling)
+      const neighbourId = after ? ids[0] : ids[ids.length - 1]
+      if (!neighbourId) return null
+      const side: DockSide =
+        node.dir === 'row' ? (after ? 'left' : 'right') : after ? 'top' : 'bottom'
+      return { paneId: neighbourId, side }
+    }
+
+    for (const child of node.children) {
+      if (child.kind === 'split') stack.push(child)
+    }
+  }
+
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Geometry
 // ---------------------------------------------------------------------------

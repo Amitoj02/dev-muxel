@@ -24,6 +24,7 @@ export type MenuAction =
   | 'split-right'
   | 'split-down'
   | 'close-pane'
+  | 'reopen-pane'
   | 'zoom-pane'
   | 'even-out'
   | 'repositories'
@@ -86,7 +87,10 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
         { type: 'separator' },
         item('Open in VS Code', 'Ctrl+Alt+O', 'open-editor'),
         { type: 'separator' },
-        item('Close pane', 'Ctrl+Alt+W', 'close-pane')
+        item('Close pane', 'Ctrl+Alt+W', 'close-pane'),
+        // The browser gesture, and the same promise: for five seconds after a
+        // close, the shell is still running and this puts it back.
+        item('Reopen closed pane', 'Ctrl+Shift+T', 'reopen-pane')
       ]
     },
     {

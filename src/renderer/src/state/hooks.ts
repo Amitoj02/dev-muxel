@@ -29,15 +29,17 @@ export {
   currentMeasure,
   getState,
   gitFor,
+  isParked,
   newId,
   noteById,
   normalisePath,
   paneById,
   paneLabel,
   repoById,
+  REOPEN_WINDOW_MS,
   runtimeFor,
   shellById,
   subscribe
 } from './store'
 
-export type { AppState, Overlay, PaneRuntime } from './store'
+export type { AppState, ClosedPane, Overlay, PaneRuntime } from './store'

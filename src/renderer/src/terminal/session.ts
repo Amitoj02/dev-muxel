@@ -255,6 +255,10 @@ export class TerminalSession {
     } else if (this.term.element.parentElement !== host) {
       // Moving the existing DOM keeps the scrollback and the GL context.
       host.appendChild(this.term.element)
+      // A parked session comes back through here after a spell outside the
+      // document, where a WebGL canvas can be holding a stale frame and no
+      // resize is coming to force a redraw. Repainting once is cheap.
+      this.term.refresh(0, this.term.rows - 1)
     }
 
     if (renderer === 'webgl') this.enableWebgl()
@@ -269,6 +273,21 @@ export class TerminalSession {
     this.observer?.disconnect()
     this.observer = null
     this.host = null
+  }
+
+  /**
+   * The pane was closed, but inside the reopen window — so nothing is torn
+   * down. The shell keeps running and keeps writing into this buffer; the
+   * element simply stops being on screen. Whoever adopts the session next
+   * gets the scrollback, the process and the shell's own state back intact.
+   */
+  park(): void {
+    this.detach()
+  }
+
+  /** Reopened, or remounted: a new pane component, the same terminal. */
+  adopt(cb: SessionCallbacks): void {
+    this.cb = cb
   }
 
   /** Coalesce fits into one per frame; a splitter drag fires dozens. */

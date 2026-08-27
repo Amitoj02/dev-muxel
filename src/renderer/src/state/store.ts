@@ -23,9 +23,11 @@ import type {
   TerminalPane
 } from '../../../shared/types'
 import {
+  anchorFor,
   autoAppend,
   collectPaneIds,
   evenOut,
+  findLeaf,
   measure,
   movePane,
   normalise,
@@ -35,6 +37,15 @@ import {
   swapPanes,
   type Rect
 } from '../../../shared/layout'
+
+/**
+ * How long a closed pane can be brought back.
+ *
+ * Inside this window nothing about it has actually been torn down: the shell
+ * is still running and the scrollback is still in memory, so Ctrl+Shift+T is
+ * a real undo rather than a fresh terminal that happens to look the same.
+ */
+export const REOPEN_WINDOW_MS = 5_000
 
 // ---------------------------------------------------------------------------
 
@@ -53,6 +64,20 @@ export type PaneRuntime = {
   attentionSince: number | null
   /** Last title the shell reported via OSC 0/2. */
   title: string | null
+}
+
+/** A pane closed recently enough to be worth keeping around. */
+export type ClosedPane = {
+  pane: Pane
+  /** The tree as it stood before the close, for an exact restore. */
+  layout: LayoutNode | null
+  /** Fallback address, for when the grid has been reshaped since. */
+  anchor: { paneId: string; side: DockSide } | null
+  /** True while the pty and the xterm buffer behind it are still alive. */
+  parked: boolean
+  expiresAt: number
+  /** Pane label at the time of closing, for the toast. */
+  label: string
 }
 
 export type Overlay =
@@ -88,6 +113,8 @@ export type AppState = {
   dragging: string | null
   /** Live drop target while dragging. */
   dropTarget: { paneId: string; side: DockSide | 'center' } | null
+  /** Closed panes still inside the reopen window, oldest first. */
+  recentlyClosed: ClosedPane[]
   /**
    * Panes that came back from the last session rather than being opened just
    * now. Used to honour `restoreRunsStartup`: reopening the app should not
@@ -132,6 +159,7 @@ let state: AppState = {
   overlay: { kind: 'none' },
   dragging: null,
   dropTarget: null,
+  recentlyClosed: [],
   restoredPaneIds: new Set<string>(),
   gridBox: { x: 0, y: 0, width: 0, height: 0 },
   toast: null
@@ -201,9 +229,16 @@ export function runtimeFor(s: AppState, paneId: string): PaneRuntime {
 }
 
 export function attentionCount(s: AppState): number {
-  return Object.entries(s.runtime).filter(
-    ([paneId, r]) => r.attention !== 'none' && paneId !== s.focusedPaneId
+  // Over the panes, not over the runtime map: a parked pane still has a
+  // runtime entry, and a pane you have closed must not shout at the taskbar.
+  return s.panes.filter(
+    (p) => p.id !== s.focusedPaneId && runtimeFor(s, p.id).attention !== 'none'
   ).length
+}
+
+/** True while a closed pane's shell and scrollback are held for a reopen. */
+export function isParked(s: AppState, paneId: string): boolean {
+  return s.recentlyClosed.some((e) => e.parked && e.pane.id === paneId)
 }
 
 /** Windows paths are case-insensitive; the git map is keyed on a stable form. */
@@ -425,21 +460,118 @@ export const actions = {
     }))
   },
 
-  closePane(paneId: string): void {
+  /**
+   * Close a pane and remember it for REOPEN_WINDOW_MS, so Ctrl+Shift+T can
+   * bring it back. A terminal whose shell is still alive is *parked* rather
+   * than killed: nothing is torn down until the window passes, which is what
+   * makes the reopen the same session and not a lookalike.
+   *
+   * @param opts.remember pass false when the pane is being replaced rather
+   *   than closed (restarting a dead shell, say) so it does not sit in the
+   *   stack pretending to be recoverable.
+   */
+  closePane(paneId: string, opts: { remember?: boolean } = {}): void {
+    const pane = paneById(state, paneId)
+    const runtime = runtimeFor(state, paneId)
+    const remember = pane !== null && opts.remember !== false
+    // Nothing to hold on to for a note, or for a shell that has already gone.
+    const parked = remember && pane.kind === 'terminal' && runtime.pid !== null && !runtime.exited
+
+    const entry: ClosedPane | null =
+      remember && pane
+        ? {
+            pane,
+            layout: state.layout,
+            anchor: anchorFor(state.layout, paneId),
+            parked,
+            expiresAt: Date.now() + REOPEN_WINDOW_MS,
+            label: paneLabel(state, pane)
+          }
+        : null
+
     set((s) => {
       const layout = removePane(s.layout, paneId)
       const panes = s.panes.filter((p) => p.id !== paneId)
-      const runtime = { ...s.runtime }
-      delete runtime[paneId]
+      const runtimeMap = { ...s.runtime }
+      // A parked pane keeps its runtime: the pty behind it is still running,
+      // and adopting it back has to find the same pid and shell.
+      if (!parked) delete runtimeMap[paneId]
       const remaining = collectPaneIds(layout)
       return {
         layout,
         panes,
-        runtime,
+        runtime: runtimeMap,
         focusedPaneId:
           s.focusedPaneId === paneId ? (remaining[remaining.length - 1] ?? null) : s.focusedPaneId,
         zoomedPaneId: s.zoomedPaneId === paneId ? null : s.zoomedPaneId,
-        overlay: s.overlay.kind === 'confirm-close' ? { kind: 'none' } : s.overlay
+        overlay: s.overlay.kind === 'confirm-close' ? { kind: 'none' } : s.overlay,
+        recentlyClosed: entry ? [...s.recentlyClosed, entry] : s.recentlyClosed
+      }
+    })
+
+    // Only worth saying when there is something running to lose.
+    if (entry?.parked) actions.toast(`Closed ${entry.label} — Ctrl+Shift+T brings it back`)
+  },
+
+  /**
+   * Bring back the pane closed most recently, if its window has not passed.
+   * Returns false when there is nothing left to bring back.
+   */
+  reopenLast(): boolean {
+    const now = Date.now()
+    const live = state.recentlyClosed.filter((e) => e.expiresAt > now)
+    const entry = live[live.length - 1]
+    if (!entry) return false
+
+    const pane = entry.pane
+    // A note deleted in the meantime has nothing left to come back to.
+    if (pane.kind === 'note' && !noteById(state, pane.noteId)) {
+      set((s) => ({ recentlyClosed: s.recentlyClosed.filter((e) => e !== entry) }))
+      return actions.reopenLast()
+    }
+
+    set((s) => {
+      const current = new Set(collectPaneIds(s.layout))
+      const before = new Set(collectPaneIds(entry.layout))
+      // If nothing else has moved since, the whole tree goes back exactly as
+      // it was, including the space the neighbours grew into.
+      const untouched =
+        before.delete(pane.id) &&
+        before.size === current.size &&
+        [...current].every((id) => before.has(id))
+
+      let layout: LayoutNode | null
+      if (untouched) layout = entry.layout
+      else if (entry.anchor && findLeaf(s.layout, entry.anchor.paneId)) {
+        layout = splitPane(s.layout, entry.anchor.paneId, entry.anchor.side, pane.id)
+      } else {
+        layout = autoAppend(s.layout, pane.id, s.gridBox, s.settings.gutter)
+      }
+
+      return {
+        panes: [...s.panes, pane],
+        layout,
+        focusedPaneId: pane.id,
+        lastTerminalPaneId: pane.kind === 'terminal' ? pane.id : s.lastTerminalPaneId,
+        // A parked pane still has its runtime; anything else starts clean.
+        runtime: { ...s.runtime, [pane.id]: s.runtime[pane.id] ?? { ...emptyRuntime } },
+        recentlyClosed: s.recentlyClosed.filter((e) => e !== entry),
+        zoomedPaneId: null
+      }
+    })
+    return true
+  },
+
+  /** Forget closed panes whose window has passed and whose resources are gone. */
+  dropClosed(paneIds: string[]): void {
+    if (paneIds.length === 0) return
+    const drop = new Set(paneIds)
+    set((s) => {
+      const runtime = { ...s.runtime }
+      for (const id of drop) delete runtime[id]
+      return {
+        runtime,
+        recentlyClosed: s.recentlyClosed.filter((e) => !drop.has(e.pane.id))
       }
     })
   },

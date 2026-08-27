@@ -16,12 +16,14 @@ import { ConfirmClose } from './components/ConfirmClose'
 import { Toast } from './components/Toast'
 import { useShortcuts } from './lib/useShortcuts'
 import { useFolderDrop } from './lib/useFolderDrop'
+import { useRecentlyClosed } from './lib/useRecentlyClosed'
 import { actions, useApp } from './state/hooks'
 
 export function App(): React.JSX.Element {
   const app = useApp()
   useShortcuts()
   useFolderDrop()
+  useRecentlyClosed()
 
   // The design exposes gutter / zoom inset / glow as live knobs; feed them
   // straight into the custom properties so CSS stays the single source of size.

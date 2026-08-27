@@ -12,6 +12,7 @@
  */
 
 import {
+  anchorFor,
   autoAppend,
   collectPaneIds,
   countLeaves,
@@ -421,6 +422,78 @@ assertTiling('split-bottom', tree)
     narrowest >= 40,
     `narrowest = ${narrowest}px`
   )
+}
+
+// ---------------------------------------------------------------------------
+// Closing a pane has to be undoable: the address it leaves behind must put it
+// back where it was
+// ---------------------------------------------------------------------------
+
+{
+  const row: LayoutNode = {
+    kind: 'split',
+    id: 's',
+    dir: 'row',
+    children: [leaf('a'), leaf('b'), leaf('c')],
+    sizes: [1 / 3, 1 / 3, 1 / 3]
+  }
+
+  const middle = anchorFor(row, 'b')
+  check('anchor: a middle pane docks before its next sibling', middle?.paneId === 'c')
+  check('anchor: a row anchors left', middle?.side === 'left')
+
+  const last = anchorFor(row, 'c')
+  check('anchor: the last pane docks after the one before it', last?.paneId === 'b')
+  check('anchor: with nothing after it, to the right', last?.side === 'right')
+
+  const column: LayoutNode = {
+    kind: 'split',
+    id: 's',
+    dir: 'column',
+    children: [leaf('a'), leaf('b')],
+    sizes: [0.5, 0.5]
+  }
+  check('anchor: a column anchors above', anchorFor(column, 'a')?.side === 'top')
+  check('anchor: and below', anchorFor(column, 'b')?.side === 'bottom')
+
+  check('anchor: a lone pane has no neighbour', anchorFor(leaf('only'), 'only') === null)
+  check('anchor: an unknown pane has no address', anchorFor(row, 'nope') === null)
+
+  // The round trip is the point: remove a pane, put it back at its address,
+  // and the grid must read the same left to right.
+  for (const paneId of ['a', 'b', 'c']) {
+    const address = anchorFor(row, paneId)
+    const without = removePane(row, paneId)
+    const back = address ? splitPane(without, address.paneId, address.side, paneId) : null
+    assertInvariants(`anchor-roundtrip-${paneId}`, back)
+    assertTiling(`anchor-roundtrip-${paneId}`, back)
+    check(
+      `anchor: ${paneId} comes back in the same order`,
+      collectPaneIds(back).join(',') === 'a,b,c',
+      collectPaneIds(back).join(',')
+    )
+  }
+
+  // A pane whose neighbour is a whole split docks against the nearest leaf
+  // inside it, which is the closest a single pane id gets to "next to".
+  const nested: LayoutNode = {
+    kind: 'split',
+    id: 's',
+    dir: 'row',
+    children: [
+      leaf('a'),
+      { kind: 'split', id: 's2', dir: 'column', children: [leaf('b'), leaf('c')], sizes: [0.5, 0.5] }
+    ],
+    sizes: [0.5, 0.5]
+  }
+  const nestedAnchor = anchorFor(nested, 'a')
+  check('anchor: the nearest leaf of a neighbouring split', nestedAnchor?.paneId === 'b')
+  check('anchor: still to its left', nestedAnchor?.side === 'left')
+
+  // Deeper down the tree, too.
+  const deepAnchor = anchorFor(nested, 'b')
+  check('anchor: found inside a nested split', deepAnchor?.paneId === 'c')
+  check('anchor: with the nested split direction', deepAnchor?.side === 'top')
 }
 
 // ---------------------------------------------------------------------------

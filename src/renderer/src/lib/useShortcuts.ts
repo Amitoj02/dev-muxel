@@ -26,6 +26,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: 'Ctrl+Alt+D', what: 'Split the focused pane to the right' },
   { keys: 'Ctrl+Alt+S', what: 'Split the focused pane downwards' },
   { keys: 'Ctrl+Alt+W', what: 'Close the focused pane' },
+  { keys: 'Ctrl+Shift+T', what: 'Bring back the pane you just closed, for 5 seconds' },
   { keys: 'Ctrl+Alt+Z', what: 'Fill the window, and back again' },
   { keys: 'Ctrl+Alt+←↑→↓', what: 'Move focus to the next pane that way' },
   { keys: 'Ctrl+Alt+1…9', what: 'Focus pane 1 to 9' },
@@ -62,6 +63,13 @@ export function runAction(action: string): void {
       return
     case 'close-pane':
       if (focused) actions.closePane(focused)
+      return
+    case 'reopen-pane':
+      // Say so when there is nothing left to bring back: the window is short,
+      // and silence reads as a broken shortcut.
+      if (!actions.reopenLast()) {
+        actions.toast('Nothing to bring back — that offer only stands for 5 seconds')
+      }
       return
     case 'zoom-pane':
       if (focused) actions.toggleZoom(focused)
@@ -169,6 +177,12 @@ function actionForChord(e: KeyboardEvent): string | null {
       default:
         return /^[1-9]$/.test(key) ? `focus-${key}` : null
     }
+  }
+
+  // Ctrl+Shift belongs to the focused terminal (copy, paste, find, clear),
+  // which handles its own; reopen is the one the app takes.
+  if (e.ctrlKey && e.shiftKey && !e.altKey) {
+    return key === 't' ? 'reopen-pane' : null
   }
 
   if (e.ctrlKey && !e.altKey && !e.shiftKey) {

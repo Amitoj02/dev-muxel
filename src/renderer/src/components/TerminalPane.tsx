@@ -9,8 +9,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Repo, TerminalPane as TerminalPaneModel } from '../../../shared/types'
-import { actions, getState, useApp } from '../state/hooks'
-import { createSession, destroySession, getSession } from '../terminal/session'
+import { actions, getState, isParked, paneById, useApp } from '../state/hooks'
+import {
+  createSession,
+  destroySession,
+  getSession,
+  type SessionCallbacks
+} from '../terminal/session'
 import { IconClose, IconSearch } from './Icons'
 
 export type TerminalPaneProps = {
@@ -33,77 +38,95 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
     const settings = getState().settings
     const buildNumber = getState().buildNumber
 
-    const session = createSession(
-      pane.id,
-      settings,
-      {
-        onInput: (data) => window.grid.pty.write(pane.id, data),
-        onResize: (cols, rows) => window.grid.pty.resize(pane.id, cols, rows),
-        onAck: (bytes) => window.grid.pty.ack(pane.id, bytes),
-        onTitle: (title) => actions.patchRuntime(pane.id, { title }),
-        onAttention: (signal) => {
-          if (signal === 'busy') {
-            // Output resuming does NOT mean the pane stopped wanting you. A
-            // CLI that rings the bell and then prints one more line would
-            // otherwise clear its own alert a millisecond later, and nothing
-            // re-raises it. Only focusing the pane clears attention.
-            actions.patchRuntime(pane.id, { busy: true })
-            return
-          }
-          actions.patchRuntime(pane.id, { busy: false })
-          if (signal === 'idle') return
-          // Never shout about the pane the user is already looking at.
-          if (getState().focusedPaneId === pane.id) return
-          actions.raiseAttention(pane.id, signal === 'bell' ? 'bell' : 'idle')
-        },
-        onShortcut: (e) => handleTerminalShortcut(pane.id, e, () => setSearching(true))
+    const callbacks: SessionCallbacks = {
+      onInput: (data) => window.grid.pty.write(pane.id, data),
+      onResize: (cols, rows) => window.grid.pty.resize(pane.id, cols, rows),
+      onAck: (bytes) => window.grid.pty.ack(pane.id, bytes),
+      onTitle: (title) => actions.patchRuntime(pane.id, { title }),
+      onAttention: (signal) => {
+        if (signal === 'busy') {
+          // Output resuming does NOT mean the pane stopped wanting you. A
+          // CLI that rings the bell and then prints one more line would
+          // otherwise clear its own alert a millisecond later, and nothing
+          // re-raises it. Only focusing the pane clears attention.
+          actions.patchRuntime(pane.id, { busy: true })
+          return
+        }
+        actions.patchRuntime(pane.id, { busy: false })
+        if (signal === 'idle') return
+        // Never shout about the pane the user is already looking at.
+        if (getState().focusedPaneId === pane.id) return
+        actions.raiseAttention(pane.id, signal === 'bell' ? 'bell' : 'idle')
       },
-      buildNumber
-    )
+      onShortcut: (e) => handleTerminalShortcut(pane.id, e, () => setSearching(true))
+    }
+
+    // A session already here means the pane is coming back rather than opening
+    // for the first time: reopened inside the window with its shell still
+    // running, or simply remounted (React does one of those in development).
+    // Either way it is adopted, because building a second session would kill a
+    // live shell and throw its scrollback away.
+    const existing = getSession(pane.id)
+    const session = existing ?? createSession(pane.id, settings, callbacks, buildNumber)
+    existing?.adopt(callbacks)
 
     const host = hostRef.current
     if (host) session.attach(host, settings.renderer)
 
     let cancelled = false
-    void window.grid.pty
-      .spawn({
-        paneId: pane.id,
-        cwd: pane.cwd,
-        shellId: pane.shellId,
-        cols: session.term.cols,
-        rows: session.term.rows
-      })
-      .then((result) => {
-        if (cancelled) return
-        if (!result.ok) {
-          actions.patchRuntime(pane.id, { exited: true, exitCode: -1 })
-          session.writeLocal(`\r\n\x1b[31m  could not start a shell: ${result.error}\x1b[0m\r\n`)
-          return
-        }
-        actions.patchRuntime(pane.id, {
-          pid: result.pid,
-          shellLabel: result.shellLabel,
-          exited: false,
-          exitCode: null
+    if (!existing) {
+      void window.grid.pty
+        .spawn({
+          paneId: pane.id,
+          cwd: pane.cwd,
+          shellId: pane.shellId,
+          cols: session.term.cols,
+          rows: session.term.rows
         })
+        .then((result) => {
+          if (cancelled) return
+          if (!result.ok) {
+            actions.patchRuntime(pane.id, { exited: true, exitCode: -1 })
+            session.writeLocal(`\r\n\x1b[31m  could not start a shell: ${result.error}\x1b[0m\r\n`)
+            return
+          }
+          actions.patchRuntime(pane.id, {
+            pid: result.pid,
+            shellLabel: result.shellLabel,
+            exited: false,
+            exitCode: null
+          })
 
-        // A pane restored from the last session only re-runs its command if
-        // the user opted in; a pane just opened always does.
-        const restored = getState().restoredPaneIds.has(pane.id)
-        const allowed = !restored || getState().settings.restoreRunsStartup
-        const command = allowed ? (pane.startupCommand ?? repo?.startupCommand) : null
-        if (command) {
-          // Give the shell a moment to print its own prompt first, otherwise
-          // the command lands in the middle of the banner.
-          window.setTimeout(() => {
-            if (cancelled) return
-            const run = repo?.runOnOpen ?? false
-            window.grid.pty.write(pane.id, run ? `${command}\r` : command)
-          }, 400)
-        }
-      })
+          // A pane restored from the last session only re-runs its command if
+          // the user opted in; a pane just opened always does.
+          const restored = getState().restoredPaneIds.has(pane.id)
+          const allowed = !restored || getState().settings.restoreRunsStartup
+          const command = allowed ? (pane.startupCommand ?? repo?.startupCommand) : null
+          if (command) {
+            // Give the shell a moment to print its own prompt first, otherwise
+            // the command lands in the middle of the banner.
+            window.setTimeout(() => {
+              if (cancelled) return
+              const run = repo?.runOnOpen ?? false
+              window.grid.pty.write(pane.id, run ? `${command}\r` : command)
+            }, 400)
+          }
+        })
+    }
 
     return () => {
+      const s = getState()
+      // Closed, but inside the reopen window: leave the shell running and the
+      // buffer intact. useRecentlyClosed reaps it once the window passes.
+      if (isParked(s, pane.id)) {
+        session.park()
+        return
+      }
+      // Still on the grid, so this is a remount rather than a close, and the
+      // spawn above may still be in flight: cancelling it here would leave the
+      // pane with a live pty whose pid it never learned.
+      if (paneById(s, pane.id)) return
+
       cancelled = true
       window.grid.pty.kill(pane.id)
       destroySession(pane.id)
@@ -194,8 +217,9 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
               onClick={() => {
                 // Simplest honest restart: drop the pane and open a fresh one
                 // in the same folder, which also resets the terminal state.
+                // Not worth remembering: the replacement is right there.
                 const { cwd, repoId, shellId } = pane
-                actions.closePane(pane.id)
+                actions.closePane(pane.id, { remember: false })
                 actions.addTerminal({ cwd, repoId, shellId })
               }}
             >

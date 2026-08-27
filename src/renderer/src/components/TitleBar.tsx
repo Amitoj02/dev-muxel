@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import { IconClose, IconMaximise, IconMinimise, IconPlus, IconRestore } from './Icons'
-import { actions, attentionCount, useApp } from '../state/hooks'
+import { actions, attentionCount, runtimeFor, useApp } from '../state/hooks'
 
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
@@ -30,12 +30,12 @@ export function TitleBar(): React.JSX.Element {
   }, [])
 
   const jumpToWaiting = (): void => {
-    const target = Object.entries(app.runtime).find(
-      ([paneId, r]) => r.attention !== 'none' && paneId !== app.focusedPaneId
+    const target = app.panes.find(
+      (p) => p.id !== app.focusedPaneId && runtimeFor(app, p.id).attention !== 'none'
     )
     if (target) {
-      actions.focusPane(target[0])
-      actions.clearAttention(target[0])
+      actions.focusPane(target.id)
+      actions.clearAttention(target.id)
     }
   }
 
