@@ -106,8 +106,14 @@ export function NotesPanel(): React.JSX.Element {
                   >
                     <IconPlus size={12} />
                   </button>
+                  {/* Keyed, so arming the delete mounts a second button rather
+                      than relabelling the bin in place. It can then take focus
+                      as it appears, which is what makes Enter confirm it and a
+                      click anywhere else cancel it. */}
                   {confirming === note.id ? (
                     <button
+                      key="confirm"
+                      autoFocus
                       className="btn btn--danger"
                       style={{ padding: '5px 8px' }}
                       onClick={() => {
@@ -125,6 +131,7 @@ export function NotesPanel(): React.JSX.Element {
                     </button>
                   ) : (
                     <button
+                      key="arm"
                       className="icon-btn icon-btn--danger"
                       title="Delete this note"
                       onClick={() => setConfirming(note.id)}

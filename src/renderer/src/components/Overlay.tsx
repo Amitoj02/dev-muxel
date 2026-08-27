@@ -22,6 +22,17 @@ export function Overlay({
 }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
+  /**
+   * Move focus into the dialog — once, as it opens.
+   *
+   * Deliberately depends on nothing. The store publishes a new state object on
+   * every git poll, every pty byte and every keystroke, so a dialog re-renders
+   * constantly; repeating the handoff on each of those blurs whatever the user
+   * is in the middle of. That is not cosmetic — it made the notes panel
+   * unusable. Typing in a field lost the caret after one character, and
+   * "Really delete" was blurred by the very render its own click caused, so
+   * its onBlur reverted it to the bin icon before the click could land.
+   */
   useEffect(() => {
     // Whatever had focus is almost certainly a terminal; take it away, or the
     // user types their dialog input into a shell.
@@ -30,7 +41,12 @@ export function Overlay({
 
     const first = ref.current?.querySelector<HTMLElement>(FOCUSABLE)
     first?.focus()
+  }, [])
 
+  // Escape and Tab, by contrast, do have to keep up with `onClose`: callers
+  // pass a fresh arrow every render. Re-binding a listener is cheap, and
+  // unlike the handoff above it touches nothing the user is holding.
+  useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
         e.preventDefault()
