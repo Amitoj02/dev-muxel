@@ -309,6 +309,21 @@ body {
 }
 
 /*
+ * A repository can carry an accent colour, and every terminal opened on it
+ * wears that colour in its header — which is how you pick one repo out of a
+ * wall of near-identical panes. The spine is deliberately left alone: it is
+ * the git and attention signal, and a repo colour must never mute that.
+ */
+.pane[data-accent='true'] .pane-header {
+  background: color-mix(in srgb, var(--repo-accent) 17%, var(--bg-header));
+  border-bottom-color: color-mix(in srgb, var(--repo-accent) 55%, var(--line));
+}
+
+.pane[data-accent='true'] .pane-header__name {
+  color: color-mix(in srgb, var(--repo-accent) 35%, var(--ink));
+}
+
+/*
  * Shrink order matters. The repo name is the one thing that tells you which
  * pane you are looking at, so it gives ground last; the branch yields first,
  * and the chips disappear entirely at the widths below.
@@ -386,13 +401,6 @@ body {
   height: var(--pane-header-h);
 }
 
-.pane-header__shell {
-  font: 500 10px / 1 var(--font-mono);
-  color: var(--ink-faint);
-  white-space: nowrap;
-  flex: none;
-}
-
 .badge-needs {
   font: 700 9.5px / 1 var(--font-ui);
   letter-spacing: 0.13em;
@@ -460,18 +468,13 @@ body {
 
 /*
  * Progressive disclosure for a narrow pane. Least useful thing goes first:
- * the shell name, then sync counts, then untracked, then the VS button, then
- * the branch. The name, the dirty count and close always survive.
+ * the sync counts, then untracked, then the VS button, then the branch. The
+ * name, the dirty count and close always survive.
+ *
+ * The badge is the widest thing in the header. Below this it collapses to the
+ * red spine and the glow, which already say the same thing, rather than
+ * shoving the zoom and close buttons off the end of the pane.
  */
-@container pane (max-width: 470px) {
-  .pane-header__shell {
-    display: none;
-  }
-}
-
-/* The badge is the widest thing in the header. Below this it collapses to the
-   red spine and the glow, which already say the same thing, rather than
-   shoving the zoom and close buttons off the end of the pane. */
 @container pane (max-width: 430px) {
   .badge-needs {
     width: 10px;
@@ -884,6 +887,15 @@ body {
   opacity: 0.65;
 }
 
+/* Only drawn for a repository that has been given a colour. */
+.repo-row__dot {
+  width: 9px;
+  height: 9px;
+  flex: none;
+  margin-right: -4px;
+  background: var(--repo-accent, var(--ink-ghost));
+}
+
 .repo-row__main {
   display: flex;
   flex-direction: column;
@@ -921,6 +933,59 @@ body {
   display: flex;
   gap: 2px;
   flex: none;
+}
+
+/* --- colour picker ----------------------------------------------------- */
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--swatch, transparent);
+  border: 1px solid var(--line-strong);
+  transition: border-color var(--dur-tint) ease;
+}
+
+.swatch:hover {
+  border-color: var(--line-focus);
+}
+
+.swatch[data-picked='true'] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 2px var(--bg-sunken);
+}
+
+/* The native picker, dressed as one more swatch. */
+.swatch--custom {
+  background: none;
+}
+
+.swatch--custom::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.swatch--custom::-webkit-color-swatch {
+  border: 0;
+}
+
+/* "No colour" reads as an empty cell struck through. */
+.swatch--none {
+  background: linear-gradient(
+    to top right,
+    transparent 46%,
+    var(--ink-ghost) 46%,
+    var(--ink-ghost) 54%,
+    transparent 54%
+  );
 }
 
 .icon-btn {

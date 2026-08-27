@@ -19,6 +19,7 @@ import {
   IconTrash
 } from './Icons'
 import { Overlay } from './Overlay'
+import { accentOf, REPO_COLOURS } from '../lib/colour'
 import { actions, normalisePath, useApp } from '../state/hooks'
 
 export function RepositoriesPanel(): React.JSX.Element {
@@ -161,10 +162,18 @@ function RepoRow({
 }): React.JSX.Element {
   const state =
     !git || git.error || !git.isRepo ? 'missing' : git.dirty > 0 ? 'dirty' : 'clean'
+  const accent = accentOf(repo.color)
 
   return (
     <div>
       <div className="repo-row" data-state={state} onDoubleClick={onToggle}>
+        {accent && (
+          <span
+            className="repo-row__dot"
+            style={{ '--repo-accent': accent } as React.CSSProperties}
+            title="This repository's colour"
+          />
+        )}
         <div className="repo-row__main">
           <span className="repo-row__name">{repo.name}</span>
           <span className="repo-row__path" title={repo.path}>
@@ -270,6 +279,43 @@ function RepoRow({
               ))}
             </select>
           </label>
+
+          <div className="field">
+            <span className="field__label">Colour</span>
+            <div className="swatches">
+              <button
+                type="button"
+                className="swatch swatch--none"
+                data-picked={!accent}
+                title="No colour"
+                onClick={() => actions.updateRepo(repo.id, { color: undefined })}
+              />
+              {REPO_COLOURS.map((c) => (
+                <button
+                  key={c.hex}
+                  type="button"
+                  className="swatch"
+                  style={{ '--swatch': c.hex } as React.CSSProperties}
+                  data-picked={accent === c.hex}
+                  title={c.name}
+                  onClick={() => actions.updateRepo(repo.id, { color: c.hex })}
+                />
+              ))}
+              <input
+                type="color"
+                className="swatch swatch--custom"
+                value={accent ?? '#5b8fd6'}
+                data-picked={Boolean(accent) && !REPO_COLOURS.some((c) => c.hex === accent)}
+                title="Any other colour"
+                onChange={(e) =>
+                  actions.updateRepo(repo.id, { color: accentOf(e.target.value) ?? undefined })
+                }
+              />
+            </div>
+            <span className="field__hint">
+              Tints the header of every terminal opened on this repository.
+            </span>
+          </div>
 
           <label className="field" style={{ gridColumn: '1 / -1' }}>
             <span className="field__label">Command on open</span>

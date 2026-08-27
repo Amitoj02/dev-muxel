@@ -10,6 +10,7 @@
 import { memo, useCallback } from 'react'
 import type { Pane } from '../../../shared/types'
 import type { Rect } from '../../../shared/layout'
+import { accentOf } from '../lib/colour'
 import {
   actions,
   gitFor,
@@ -46,6 +47,7 @@ export const PaneShell = memo(function PaneShell({
   const git = gitFor(app, pane)
   const repo = pane.kind === 'terminal' ? repoById(app, pane.repoId) : null
   const note = pane.kind === 'note' ? noteById(app, pane.noteId) : null
+  const accent = accentOf(repo?.color)
 
   // Keep the note header's relative timestamp honest.
   useTick(10_000, pane.kind === 'note')
@@ -89,8 +91,9 @@ export const PaneShell = memo(function PaneShell({
   return (
     <section
       className={pane.kind === 'note' ? 'pane pane--note' : 'pane'}
-      style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+      style={paneStyle(rect, accent)}
       data-focused={focused}
+      data-accent={accent ? 'true' : undefined}
       data-zoomed={zoomed}
       data-animating={animating}
       data-attention={runtime.attention}
@@ -102,7 +105,6 @@ export const PaneShell = memo(function PaneShell({
         label={paneLabel(app, pane)}
         git={git}
         runtime={runtime}
-        shellLabel={runtime.shellLabel}
         zoomed={zoomed}
         noteStatus={note ? `saved ${ago(note.updatedAt)}` : undefined}
         onFocus={focus}
@@ -133,3 +135,13 @@ export const PaneShell = memo(function PaneShell({
     </section>
   )
 })
+
+/**
+ * Geometry, plus the repository's accent as a custom property for the header
+ * to pick up. The colour is validated on the way in: it ends up in an inline
+ * style, and the state file it comes from is editable by hand.
+ */
+function paneStyle(rect: Rect, accent: string | null): React.CSSProperties {
+  const geometry = { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
+  return accent ? ({ ...geometry, '--repo-accent': accent } as React.CSSProperties) : geometry
+}

@@ -17,7 +17,6 @@ export type PaneHeaderProps = {
   label: string
   git: GitState | null
   runtime: PaneRuntime
-  shellLabel: string | null
   zoomed: boolean
   noteStatus?: string
   onFocus: () => void
@@ -89,10 +88,6 @@ export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
         <button className="badge-needs" onClick={props.onAnswer} title="Focus this pane">
           NEEDS YOU
         </button>
-      )}
-
-      {pane.kind === 'terminal' && props.shellLabel && (
-        <span className="pane-header__shell">{props.shellLabel}</span>
       )}
 
       {props.onOpenEditor && (
