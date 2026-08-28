@@ -15,7 +15,7 @@ npm run build:win        # installer + portable
 npm run icon             # regenerate build/icon.ico
 ```
 
-`devmuxel.cmd` runs the built output through Electron's own signed binary,
+`dev-muxel.cmd` runs the built output through Electron's own signed binary,
 which is handy on machines where Smart App Control blocks the packaged exe.
 
 ## How it is put together

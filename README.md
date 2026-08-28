@@ -297,7 +297,7 @@ no CLI binds either.
 **Windows blocked DevMuxel.exe.** Smart App Control is enforced on some
 machines and judges each binary by its hash, so an unsigned build that ran yesterday can be
 blocked today with *"An Application Control policy has blocked this file"*. If
-you built from source, `devmuxel.cmd` runs the same app through Electron's own
+you built from source, `dev-muxel.cmd` runs the same app through Electron's own
 signed binary and is unaffected.
 
 **`Ctrl+Alt+R` does nothing.** It is a popular global hotkey — screen recorders
