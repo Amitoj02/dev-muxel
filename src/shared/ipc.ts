@@ -40,6 +40,10 @@ export const CH = {
   browserBody: 'grid:browser:body',
   browserClear: 'grid:browser:clear',
   browserStash: 'grid:browser:stash',
+  /** Renderer tells main whether there is a browser pane to arm at all. */
+  browserBridgeSync: 'grid:browser:bridgeSync',
+  /** A pane's send button, handing its comments to a waiting session. */
+  browserSendComments: 'grid:browser:sendComments',
 
 
   winMinimise: 'grid:win:minimise',
@@ -60,6 +64,12 @@ export const EV = {
   browserNet: 'grid:ev:browser:net',
   browserCapture: 'grid:ev:browser:capture',
   browserFocus: 'grid:ev:browser:focus',
+  /** A session asked for the element picker on the last active browser pane. */
+  browserArmPicker: 'grid:ev:browser:armPicker',
+  /** That batch has been read by a session; the pane may forget it. */
+  browserCommentsTaken: 'grid:ev:browser:commentsTaken',
+  /** Whether a session is holding the line, so the pane can say so. */
+  browserWaiting: 'grid:ev:browser:waiting',
   winMaximised: 'grid:ev:win:maximised',
   winFocus: 'grid:ev:win:focus',
   appBeforeQuit: 'grid:ev:app:beforeQuit',

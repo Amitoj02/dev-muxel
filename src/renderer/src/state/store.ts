@@ -118,6 +118,12 @@ export type AppState = {
   focusedPaneId: string | null
   /** Last terminal pane to hold focus — where a note's "send" lands. */
   lastTerminalPaneId: string | null
+  /**
+   * Last browser pane to hold focus. A session running /grid-browser asks for
+   * "the element picker" without knowing which pane it means; this is what it
+   * means.
+   */
+  lastBrowserPaneId: string | null
   zoomedPaneId: string | null
   /** Keyed by normalised repo path. */
   git: Record<string, GitState>
@@ -168,6 +174,7 @@ let state: AppState = {
   panes: [],
   focusedPaneId: null,
   lastTerminalPaneId: null,
+  lastBrowserPaneId: null,
   zoomedPaneId: null,
   git: {},
   runtime: {},
@@ -366,8 +373,8 @@ export const actions = {
     const pane = paneById(state, paneId)
     set({
       focusedPaneId: paneId,
-      lastTerminalPaneId:
-        pane?.kind === 'terminal' ? pane.id : state.lastTerminalPaneId
+      lastTerminalPaneId: pane?.kind === 'terminal' ? pane.id : state.lastTerminalPaneId,
+      lastBrowserPaneId: pane?.kind === 'browser' ? pane.id : state.lastBrowserPaneId
     })
     if (paneId) actions.clearAttention(paneId)
   },

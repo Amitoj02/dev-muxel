@@ -83,6 +83,15 @@ preference overwritten in `will-attach-webview` because an HTML attribute is
 not a security boundary. That hardening lives in `src/main/browser/guest.ts`
 and is the first thing to read before changing anything about guests.
 
+Comments go the other way round from everything else here, and that is the
+point of them. GRID does not push them at a session; a session comes and asks.
+`/grid-browser` runs a script that talks to the running app over a loopback
+port GRID publishes in `bridge.json` — a running Electron app cannot be driven
+by pointing at its executable, so it listens instead, on a port the OS picks
+behind a token generated fresh each launch, with the manifest removed on the
+way out. One waiter at a time, because two sessions holding the line for the
+same comments is a race with no right answer. `src/main/browser/bridge.ts`.
+
 The element picker is a script injected into the guest with
 `executeJavaScript`, and it has to be: hit-testing an element inside a separate
 WebContents cannot be done from outside it, and an overlay drawn in the host

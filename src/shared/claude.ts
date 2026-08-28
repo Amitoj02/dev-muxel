@@ -11,7 +11,7 @@
 // Types only, deliberately: `scripts/check-browser.mts` runs under Node's type
 // stripping, where a type import is erased but a value import would have to
 // resolve a bare specifier with no extension.
-import type { NetEntry, PickedElement } from './browser'
+import type { CommentBatch, NetEntry, PickedElement } from './browser'
 
 // ---------------------------------------------------------------------------
 // Redaction
@@ -266,6 +266,43 @@ function clean(text: string): string {
     // so the rule that normally forbids it does not apply here.
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
+}
+
+/**
+ * A batch of comments, as the text a waiting session reads on its standard
+ * output.
+ *
+ * The same sanitising as everything else here, and for a stronger reason: this
+ * one is not pasted into a terminal by a person who can see it first, it is
+ * printed straight into a session's context by a script. Every field of it was
+ * read out of somebody's web page.
+ */
+export function formatComments(batch: CommentBatch, maxChars = DEFAULT_MAX_BODY_CHARS): string {
+  const out: string[] = []
+  const count = batch.comments.length
+
+  out.push(
+    `${count} comment${count === 1 ? '' : 's'} from the GRID browser pane "${clean(batch.pane)}" on ${clean(batch.url)}:`,
+    ''
+  )
+
+  batch.comments.forEach((comment, i) => {
+    const said = clean(comment.text).trim()
+    out.push(`### ${i + 1}. ${said || '(no comment given)'}`)
+    out.push('')
+    // A note about the page as a whole has nothing to describe under it.
+    if (comment.element) {
+      out.push(...describeElement(comment.element, maxChars))
+      out.push('')
+    }
+  })
+
+  const lines: string[] = []
+  for (const part of out) {
+    if (part === '' && lines[lines.length - 1] === '') continue
+    lines.push(part)
+  }
+  return lines.join('\n').trimEnd()
 }
 
 /**

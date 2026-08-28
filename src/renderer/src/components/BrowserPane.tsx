@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { BrowserPane as BrowserPaneModel, ViewportId } from '../../../shared/types'
+import type { PickedElement } from '../../../shared/browser'
 import {
   BROWSER_PARTITION,
   VIEWPORTS,
@@ -29,29 +30,32 @@ import {
   viewportOf
 } from '../../../shared/browser'
 import {
+  addComment,
   chromeVersion,
   dropNet,
+  registerArm,
   registerView,
   replaceNet,
   setPicked,
+  useBridgeWaiting,
   useNetLog
 } from '../browser/netlog'
 import { cancelPick, pickElement } from '../browser/picker'
+import { CommentPopover, CommentsPanel, sendComments } from './PageComments'
 import type {
   WebviewElement,
   WebviewFailEvent,
   WebviewNavigateEvent,
   WebviewTitleEvent
 } from '../browser/webview'
-import { actions, getState, paneById, useApp } from '../state/hooks'
+import { actions, getState, paneById, paneLabel, useApp } from '../state/hooks'
 import {
   IconArrowLeft,
   IconArrowRight,
   IconClose,
   IconGlobe,
   IconPick,
-  IconRefresh,
-  IconSend
+  IconRefresh
 } from './Icons'
 import { NetworkLog } from './NetworkLog'
 
@@ -75,7 +79,17 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   const [nav, setNav] = useState({ back: false, forward: false })
   const [failure, setFailure] = useState<string | null>(null)
   const [showLog, setShowLog] = useState(false)
-  const [picking, setPicking] = useState(false)
+  const [showComments, setShowComments] = useState(false)
+  /** The selector is on: pointing at one thing leads straight to the next. */
+  const [selecting, setSelecting] = useState(false)
+  const selectorOn = useRef(false)
+  const waiting = useBridgeWaiting()
+  const label = paneLabel(useApp(), pane)
+  /**
+   * The picker, reachable from the mount effect — which is keyed on the pane
+   * id and so cannot close over a callback that changes every render.
+   */
+  const pickRef = useRef<(() => void) | null>(null)
 
   const preset = viewportOf(pane.viewport)
   const scale = fitScale(stage, preset)
@@ -88,6 +102,8 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
     const el = ref.current
     if (!el) return
     registerView(pane.id, el)
+    // How /grid-browser reaches this pane's picker from a session elsewhere.
+    registerArm(pane.id, () => void pickRef.current?.())
 
     const syncNav = (): void => {
       setNav({ back: el.canGoBack(), forward: el.canGoForward() })
@@ -197,6 +213,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
       el.removeEventListener('destroyed', onGone)
       el.removeEventListener('render-process-gone', onGone)
       registerView(pane.id, null)
+      registerArm(pane.id, null)
       attached.current = false
 
       // Still on the grid means this is a remount, not a close: main's log has
@@ -264,25 +281,66 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   )
 
   /**
-   * Point at something in the page.
+   * Arm the picker once and hand back whatever was pointed at.
    *
    * The wait is the user's: `pickElement` resolves when they click, press
    * Escape, or the page navigates away — so this promise can be outstanding
    * for as long as they are looking around.
    */
-  const pick = useCallback(async () => {
+  const armOnce = useCallback(async () => {
     const el = ref.current
     if (!el) return
-    if (picking) {
-      cancelPick(el)
-      setPicking(false)
+    const result = await pickElement(el)
+    if (result) {
+      // The comment box opens over it; picking resumes when that box closes.
+      setPicked(pane.id, result)
       return
     }
-    setPicking(true)
-    const result = await pickElement(el)
-    setPicking(false)
-    if (result) setPicked(pane.id, result)
-  }, [picking, pane.id])
+    // Escape, or a navigation: that is the selector being turned off.
+    selectorOn.current = false
+    setSelecting(false)
+  }, [pane.id])
+
+  /**
+   * The selector as a mode rather than a single shot.
+   *
+   * Marking a page up is a run of comments, not one — so pointing at something
+   * and saying what is wrong with it puts you straight back into pointing, and
+   * it stays that way until you turn it off or press Escape.
+   */
+  const toggleSelector = useCallback(() => {
+    const el = ref.current
+    if (!el) return
+    if (selectorOn.current) {
+      selectorOn.current = false
+      setSelecting(false)
+      cancelPick(el)
+      return
+    }
+    selectorOn.current = true
+    setSelecting(true)
+    void armOnce()
+  }, [armOnce])
+
+  /** Called when the comment box closes, whether it was saved or dropped. */
+  const resumeSelector = useCallback(() => {
+    if (!selectorOn.current) return
+    void armOnce()
+  }, [armOnce])
+
+  /**
+   * What /grid-browser reaches. It asks for the selector, so it turns it on
+   * rather than toggling — and opens the comments, because the session that
+   * asked is now waiting on the send button in there.
+   */
+  const armFromSession = useCallback(() => {
+    setShowComments(true)
+    if (!selectorOn.current) toggleSelector()
+  }, [toggleSelector])
+
+  useEffect(() => {
+    pickRef.current = armFromSession
+  }, [armFromSession])
 
   const reload = useCallback((hard: boolean) => {
     const el = ref.current
@@ -304,8 +362,10 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
         scale={scale}
         logOpen={showLog}
         logFailures={failures}
-        picking={picking}
-        onPick={() => void pick()}
+        selecting={selecting}
+        commentsOpen={showComments}
+        commentCount={log.comments.length}
+        onToggleComments={() => setShowComments((open) => !open)}
         onGo={go}
         onBack={() => ref.current?.goBack()}
         onForward={() => ref.current?.goForward()}
@@ -313,35 +373,6 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
         onViewport={(viewport) => actions.patchBrowser(pane.id, { viewport })}
         onToggleLog={() => setShowLog((open) => !open)}
       />
-
-      {log.picked && (
-        <div className="browser-pick">
-          <IconPick size={11} />
-          <span className="browser-pick__what" title={log.picked.selector}>
-            {log.picked.selector || log.picked.tag}
-          </span>
-          <span className="browser-pick__size">
-            {log.picked.rect.width}×{log.picked.rect.height}
-          </span>
-          <span className="pane-header__gap" />
-          <button
-            className="netlog__send"
-            onClick={() =>
-              actions.showOverlay({ kind: 'send-to-claude', paneId: pane.id, uids: [] })
-            }
-            title="Send this element to a Claude session"
-          >
-            <IconSend size={11} /> Claude
-          </button>
-          <button
-            className="pane-btn"
-            onClick={() => setPicked(pane.id, null)}
-            title="Drop this selection"
-          >
-            <IconClose size={10} />
-          </button>
-        </div>
-      )}
 
       <div className="browser-stage" ref={stageRef} data-device={preset.id}>
         <div
@@ -374,6 +405,28 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
           />
         </div>
 
+        {log.picked && (
+          <CommentPopover
+            element={log.picked}
+            preset={preset}
+            scale={scale}
+            stage={stage}
+            onSave={(text) => {
+              addComment(pane.id, {
+                id: `cmt_${Date.now().toString(36)}`,
+                element: log.picked as PickedElement,
+                text,
+                at: Date.now()
+              })
+              resumeSelector()
+            }}
+            onCancel={() => {
+              setPicked(pane.id, null)
+              resumeSelector()
+            }}
+          />
+        )}
+
         {blank && <BrowserStart pane={pane} onGo={go} />}
         {failure && !blank && (
           <div className="browser-failure">
@@ -384,6 +437,26 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
           </div>
         )}
       </div>
+
+      {showComments && (
+        <CommentsPanel
+          paneId={pane.id}
+          comments={log.comments}
+          waiting={waiting}
+          picking={selecting}
+          onTogglePicker={toggleSelector}
+          onNote={(text) =>
+            addComment(pane.id, {
+              id: `cmt_${Date.now().toString(36)}`,
+              element: null,
+              text,
+              at: Date.now()
+            })
+          }
+          onSend={() => sendComments(pane.id, label, pane.url, log.comments)}
+          onClose={() => setShowComments(false)}
+        />
+      )}
 
       {showLog && <NetworkLog paneId={pane.id} log={log} onClose={() => setShowLog(false)} />}
     </div>
@@ -399,8 +472,10 @@ type ToolbarProps = {
   scale: number
   logOpen: boolean
   logFailures: number
-  picking: boolean
-  onPick: () => void
+  selecting: boolean
+  commentsOpen: boolean
+  commentCount: number
+  onToggleComments: () => void
   onGo: (raw: string) => boolean
   onBack: () => void
   onForward: () => void
@@ -509,11 +584,15 @@ function BrowserToolbar(props: ToolbarProps): React.JSX.Element {
 
       <button
         className="browser-net"
-        data-open={props.picking}
-        onClick={props.onPick}
-        title="Point at something in the page — Esc cancels"
+        data-open={props.commentsOpen || props.selecting}
+        data-armed={props.commentCount > 0}
+        onClick={props.onToggleComments}
+        title="Comments on this page"
       >
         <IconPick size={11} />
+        {props.commentCount > 0 && (
+          <span className="browser-net__badge">{props.commentCount}</span>
+        )}
       </button>
 
       {/* No count on it: the pane header already carries every other number,

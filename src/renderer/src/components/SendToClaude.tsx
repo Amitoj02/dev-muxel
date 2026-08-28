@@ -32,10 +32,9 @@ import {
   type SendableBody,
   type SendableEntry
 } from '../../../shared/claude'
-import { netLogFor, setPicked, useNetLog } from '../browser/netlog'
+import { netLogFor, useNetLog } from '../browser/netlog'
 import { getSession } from '../terminal/session'
 import { actions, paneById, paneLabel, repoById, runtimeFor, useApp } from '../state/hooks'
-import { IconClose } from './Icons'
 import { Overlay } from './Overlay'
 
 /**
@@ -111,8 +110,6 @@ export function SendToClaude({
     [entries, bodies]
   )
 
-  const picked = log.picked
-
   const text = useMemo(
     () =>
       formatForClaude(items, {
@@ -120,10 +117,9 @@ export function SendToClaude({
         paneLabel: label,
         pageUrl,
         includeSensitive,
-        maxBodyChars: DEFAULT_MAX_BODY_CHARS,
-        element: picked
+        maxBodyChars: DEFAULT_MAX_BODY_CHARS
       }),
-    [items, comment, label, pageUrl, includeSensitive, picked]
+    [items, comment, label, pageUrl, includeSensitive]
   )
 
   /**
@@ -182,9 +178,7 @@ export function SendToClaude({
   const send = async (): Promise<void> => {
     setBusy(true)
     try {
-      const hint = entries[0]
-        ? `${entries[0].method}-${entries[0].name}`
-        : (picked?.selector ?? hostLabel(pageUrl))
+      const hint = entries[0] ? `${entries[0].method}-${entries[0].name}` : hostLabel(pageUrl)
 
       if (targetId === 'new') {
         const where = targets.newSessionCwd
@@ -282,13 +276,7 @@ export function SendToClaude({
         <div className="dialog__head">
           <h2 className="dialog__title">SEND TO CLAUDE</h2>
           <span className="dialog__sub">
-            {[
-              picked ? 'an element' : null,
-              entries.length ? `${entries.length} request${entries.length === 1 ? '' : 's'}` : null
-            ]
-              .filter(Boolean)
-              .join(' and ') || 'nothing'}{' '}
-            from {label}
+            {entries.length} request{entries.length === 1 ? '' : 's'} from {label}
           </span>
           <button className="dialog__close" onClick={() => actions.closeOverlay()} aria-label="Close">
             ✕
@@ -297,21 +285,6 @@ export function SendToClaude({
 
         <div className="dialog__body">
           <div className="send-summary">
-            {picked && (
-              <span className="send-summary__row">
-                <span className="send-summary__method">ELEMENT</span>
-                <span className="send-summary__name" title={picked.selector}>
-                  {picked.selector || picked.tag}
-                </span>
-                <button
-                  className="pane-btn"
-                  onClick={() => setPicked(paneId, null)}
-                  title="Leave the element out of this"
-                >
-                  <IconClose size={10} />
-                </button>
-              </span>
-            )}
             {entries.map((e) => (
               <span key={e.uid} className="send-summary__row" data-failed={e.status !== null && e.status >= 400}>
                 <span className="send-summary__method">{e.method}</span>
@@ -453,7 +426,7 @@ export function SendToClaude({
         <div className="dialog__foot">
           <button
             className="btn btn--primary"
-            disabled={busy || (entries.length === 0 && !picked)}
+            disabled={busy || entries.length === 0}
             onClick={() => void send()}
           >
             Send it

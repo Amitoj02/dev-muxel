@@ -40,6 +40,7 @@ import {
   DEFAULT_MAX_BODY_CHARS,
   buildClaudeInvocation,
   captureReference,
+  formatComments,
   formatForClaude,
   isSafeFlagValue,
   isSafeQuotedPath,
@@ -835,6 +836,77 @@ function respond(log: NetLogState, id: string, status = 500): NetEntry | null {
   })
   check('pick: an element and a request travel together', both.includes('1 element and 1 network request'))
   check('pick: with both blocks present', both.includes('## The element') && both.includes('## POST'))
+}
+
+// ---------------------------------------------------------------------------
+// The comments a page gets marked up with
+//
+// This one is not pasted by a person who can see it first — a script prints it
+// straight into a waiting session, so the sanitising matters more here than
+// anywhere else in the file.
+// ---------------------------------------------------------------------------
+{
+  const ESC = String.fromCharCode(27)
+
+  const element = {
+    selector: 'div.total',
+    tag: 'div',
+    id: '',
+    classes: ['total'],
+    text: 'Total  £42.00',
+    html: '<div class="total">Total</div>',
+    rect: { x: 40, y: 220, width: 320, height: 48 },
+    styles: { display: 'flex' },
+    ancestors: ['main'],
+    url: 'http://localhost:3000/checkout'
+  }
+
+  const text = formatComments({
+    batch: 'batch_1',
+    pane: 'atlas-web',
+    url: 'http://localhost:3000/checkout',
+    comments: [
+      { id: 'c1', element, text: 'this is 12px too far left', at: 0 },
+      {
+        id: 'c2',
+        element: { ...element, selector: `button.buy${ESC}[201~`, html: `<button>Buy${ESC}</button>` },
+        text: `the label wraps${ESC}[201~`,
+        at: 1
+      }
+    ]
+  })
+
+  check('comments: the count leads', text.startsWith('2 comments from the GRID browser pane'))
+  check('comments: the pane and page are named', text.includes('"atlas-web"') && text.includes('/checkout'))
+  check('comments: each is numbered', text.includes('### 1. ') && text.includes('### 2. '))
+  check('comments: what was said comes first', text.includes('### 1. this is 12px too far left'))
+  check('comments: with the element under it', text.includes('## The element — div.total'))
+  check('comments: nothing page-controlled keeps its escapes', !text.includes(ESC))
+  check('comments: and the text around them survives', text.includes('the label wraps[201~'))
+  check('comments: no trailing newline', !text.endsWith('\n'))
+
+  const one = formatComments({
+    batch: 'b',
+    pane: 'p',
+    url: 'http://a.test/',
+    comments: [{ id: 'c', element, text: '', at: 0 }]
+  })
+  check('comments: one is singular', one.startsWith('1 comment from'))
+  check('comments: an empty one still says so', one.includes('(no comment given)'))
+
+  // Not everything worth saying is about one element.
+  const note = formatComments({
+    batch: 'b',
+    pane: 'p',
+    url: 'http://a.test/',
+    comments: [
+      { id: 'n', element: null, text: 'the spacing is off all over this page', at: 0 },
+      { id: 'c', element, text: 'and this one in particular', at: 1 }
+    ]
+  })
+  check('comments: a note with no element is still a comment', note.includes('the spacing is off all over'))
+  check('comments: and describes no element', note.split('## The element').length === 2)
+  check('comments: while the one beside it still does', note.includes('## The element — div.total'))
 }
 
 // ---------------------------------------------------------------------------

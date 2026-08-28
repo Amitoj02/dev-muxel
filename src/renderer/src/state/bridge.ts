@@ -13,7 +13,13 @@ import type { PersistedState } from '../../../shared/types'
 import { actions, attentionCount, getState, subscribe } from './store'
 import { hydrate, toPersisted } from './store'
 import { getSession } from '../terminal/session'
-import { ingestNet, setNetStatus } from '../browser/netlog'
+import {
+  armPicker,
+  ingestNet,
+  setBridgeWaiting,
+  setNetStatus,
+  settleBatch
+} from '../browser/netlog'
 
 const SAVE_DEBOUNCE_MS = 500
 
@@ -29,6 +35,7 @@ export async function connect(): Promise<void> {
 
   wireEvents()
   wireAttention()
+  wireBrowserBridge()
   wirePersistence()
 }
 
@@ -73,6 +80,28 @@ function wireEvents(): void {
     actions.focusPane(paneId)
   })
 
+  // A session ran /grid-browser and wants the picker. It named no pane — the
+  // one you were last looking at is what it meant.
+  window.grid.on.browserArmPicker(() => {
+    const state = getState()
+    const target =
+      (state.lastBrowserPaneId &&
+        state.panes.some((p) => p.id === state.lastBrowserPaneId) &&
+        state.lastBrowserPaneId) ||
+      state.panes.find((p) => p.kind === 'browser')?.id
+    if (!target) return
+    actions.focusPane(target)
+    if (!armPicker(target)) actions.toast('That browser pane is not ready yet', 'error')
+  })
+
+  window.grid.on.browserCommentsTaken((batch) => {
+    settleBatch(batch)
+  })
+
+  window.grid.on.browserWaiting((waiting) => {
+    setBridgeWaiting(waiting)
+  })
+
   // Nothing to do on focus: main already refreshes every repository when the
   // window comes forward, and asking again from here just doubles the work.
 
@@ -96,6 +125,24 @@ function wireAttention(): void {
     last = count
     window.grid.window.attention(count)
   })
+}
+
+/**
+ * Keep main told whether there is a browser pane at all.
+ *
+ * The bridge has to refuse `/grid-browser` when there is nothing to point at,
+ * and it has to do that before anybody starts waiting — but the pane list
+ * lives here. Pushed on change only, like the taskbar count.
+ */
+function wireBrowserBridge(): void {
+  let last = false
+  subscribe(() => {
+    const hasBrowser = getState().panes.some((p) => p.kind === 'browser')
+    if (hasBrowser === last) return
+    last = hasBrowser
+    window.grid.browser.bridgeSync({ hasBrowser })
+  })
+  window.grid.browser.bridgeSync({ hasBrowser: false })
 }
 
 function wirePersistence(): void {

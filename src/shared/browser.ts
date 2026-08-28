@@ -266,6 +266,37 @@ export type PickedElement = {
   url: string
 }
 
+/**
+ * Something pointed at, with something said about it.
+ *
+ * Comments pile up in the pane rather than going anywhere on their own: you
+ * mark up a page at your own pace, and a Claude session collects the lot when
+ * one asks. That is why they carry their own id — the session that takes them
+ * has to be able to say which batch it took, so the pane knows what to clear.
+ */
+export type PageComment = {
+  id: string
+  /**
+   * What it is about, when it is about something in particular. Null for a
+   * note about the page as a whole — "the spacing is off everywhere" is a
+   * thing worth saying, and pointing at one element to say it would be a lie.
+   */
+  element: PickedElement | null
+  /** What the user typed. */
+  text: string
+  /** Wall-clock ms, for ordering and for the list. */
+  at: number
+}
+
+/** One handover: everything a pane had, and a name for it. */
+export type CommentBatch = {
+  batch: string
+  /** The pane it came from, by label. */
+  pane: string
+  url: string
+  comments: PageComment[]
+}
+
 // ---------------------------------------------------------------------------
 // Network log
 // ---------------------------------------------------------------------------

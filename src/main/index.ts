@@ -11,7 +11,10 @@ import path from 'node:path'
 import os from 'node:os'
 import { CH, EV } from '../shared/ipc'
 import type { GitState, PersistedState, PtySpawnResult, Settings, ViewportId } from '../shared/types'
+import { BrowserBridge } from './browser/bridge'
 import { BrowserCapture, type CaptureStatus } from './browser/network'
+import type { CommentBatch } from '../shared/browser'
+import { formatComments } from '../shared/claude'
 import { CaptureStash } from './browser/stash'
 import { hardenGuest, prepareGuestSession } from './browser/guest'
 import { buildMenu } from './menu'
@@ -39,6 +42,14 @@ let store: Store
 let stash: CaptureStash
 let gitWatcher: GitWatcher | null = null
 let quitting = false
+/**
+ * Whether the grid currently holds a browser pane. Pushed up by the renderer,
+ * which owns the pane list — main needs it to tell a waiting script that there
+ * is nothing to point at, before anybody starts waiting.
+ */
+let hasBrowserPane = false
+
+let bridge: BrowserBridge
 
 /**
  * ConPTY's reflow behaviour depends on the Windows build, and xterm needs to
@@ -227,6 +238,17 @@ function registerIpc(): void {
     stash.write(String(text ?? ''), String(hint ?? ''))
   )
 
+  ipcMain.on(CH.browserBridgeSync, (_e, state: { hasBrowser?: boolean }) => {
+    hasBrowserPane = Boolean(state?.hasBrowser)
+  })
+
+  ipcMain.handle(CH.browserSendComments, (_e, batch: CommentBatch) => ({
+    // Formatted here rather than in the script: the text is built out of a web
+    // page's own markup and styles, and `formatComments` is what strips the
+    // control characters out of it before it reaches a session's context.
+    taken: bridge.deliver({ ...batch, text: formatComments(batch) })
+  }))
+
   // --- window ------------------------------------------------------------
 
   ipcMain.on(CH.winMinimise, () => win?.minimize())
@@ -302,6 +324,22 @@ app.whenReady().then(async () => {
   stash = new CaptureStash(app.getPath('userData'))
   await store.load()
 
+  bridge = new BrowserBridge(app.getPath('userData'), {
+    hasBrowserPane: () => hasBrowserPane,
+    armPicker: async () => {
+      if (!hasBrowserPane || !win || win.isDestroyed()) return false
+      win.webContents.send(EV.browserArmPicker)
+      return true
+    },
+    acknowledge: (batch) => win?.webContents.send(EV.browserCommentsTaken, batch),
+    onWaiting: (waiting) => win?.webContents.send(EV.browserWaiting, waiting)
+  })
+  // A failure here costs the /grid-browser skill and nothing else, so it is
+  // reported rather than allowed to stop the app coming up.
+  await bridge.start().catch((err) => {
+    console.error('[main] the browser bridge could not start:', err)
+  })
+
   // The renderer loads nothing remote and asks for nothing; deny outright
   // rather than relying on there being no code that would request it.
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
@@ -369,6 +407,7 @@ app.on('before-quit', (event) => {
   win?.webContents.send(EV.appBeforeQuit)
   pty.killAll(true)
   capture.disposeAll()
+  void bridge?.stop()
   gitWatcher?.dispose()
   gitWatcher = null
 

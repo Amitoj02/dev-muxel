@@ -114,21 +114,52 @@ put a layout next to itself at two widths.
 The two buttons after the device switch are the ones that get work done: `⌖`
 points at an element, `NET` opens the network log.
 
-### Pointing at something
+### Marking a page up
 
-The crosshair puts the page into pick mode. Hover and every element under the
-cursor is outlined with its tag and its size; click one and the pane keeps it.
-`Esc` cancels, and so does clicking the crosshair again.
+The `⌖` button opens the pane's comments, and `point at something` turns the
+selector on. Hover and every element under the cursor is outlined with its tag
+and size; click one and a box opens over the page for you to say what is wrong
+with it. `Enter` adds the comment.
 
-What it keeps is what an argument about layout actually turns on: a CSS path
+The selector **stays on**. Adding a comment puts you straight back into
+pointing, because marking a page up is a run of remarks and not one — it is off
+only when you press `Esc` or click the button again.
+
+Not everything is about one element, so the list also takes a plain note about
+the page as a whole.
+
+Comments stay in the pane behind a count on that button. Nothing is sent, and
+there is nothing to decide at the moment of writing — you mark the page up at
+your own pace, editing or deleting as you go.
+
+Each one carries what an argument about layout actually turns on: a CSS path
 back to the element, where it sits and how big it is, its text, its markup, and
 the computed styles that matter — `display`, `position`, the box, the flex and
 grid properties, type and colour. Not the six hundred declarations a browser
 will happily give you.
 
-It goes to Claude the same way a request does, and the two travel together: tick
-the failing call, point at the thing that looks wrong, and ask one question
-about both.
+### Handing them to Claude
+
+In any Claude session, anywhere on the machine, run:
+
+```
+/grid-browser
+```
+
+It arms the picker in the browser pane you last used and then waits. Mark the
+page up, press `Send` in the pane, and the comments arrive in that session,
+which then goes and fixes them. They are cleared from the pane once taken, so
+nothing is sent twice.
+
+The order does not matter: comment first and run the skill afterwards if you
+prefer — the send button is always there, and it says when a session is
+waiting. If no browser pane is open, the skill fails and says so rather than
+waiting for something that cannot happen.
+
+The skill lives in `~/.claude/skills/grid-browser/`. It finds GRID through a
+loopback port and token that GRID writes to `%APPDATA%\GRID\bridge.json` while
+it runs, so it works wherever GRID was started from — and stops working the
+moment GRID does.
 
 ### The network log
 

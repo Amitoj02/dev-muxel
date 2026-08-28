@@ -12,7 +12,12 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react'
-import { upsertEntry, type NetEntry, type PickedElement } from '../../../shared/browser'
+import {
+  upsertEntry,
+  type NetEntry,
+  type PageComment,
+  type PickedElement
+} from '../../../shared/browser'
 import type { WebviewElement } from './webview'
 
 export type PaneNetLog = {
@@ -23,9 +28,17 @@ export type PaneNetLog = {
   reason: string | null
   /** The element last pointed at in this pane, until it is sent or dropped. */
   picked: PickedElement | null
+  /** Comments made on this page, waiting for a session to come and get them. */
+  comments: PageComment[]
 }
 
-const EMPTY: PaneNetLog = { entries: [], attached: false, reason: null, picked: null }
+const EMPTY: PaneNetLog = {
+  entries: [],
+  attached: false,
+  reason: null,
+  picked: null,
+  comments: []
+}
 
 const logs = new Map<string, PaneNetLog>()
 const listeners = new Map<string, Set<() => void>>()
@@ -97,6 +110,45 @@ export function setPicked(paneId: string, picked: PickedElement | null): void {
   notify(paneId)
 }
 
+/**
+ * Comments are held here rather than in the app store for the same reason the
+ * log is: they belong to one pane, nothing else in the grid reads them, and
+ * they change while somebody is typing.
+ */
+export function addComment(paneId: string, comment: PageComment): void {
+  const current = logs.get(paneId) ?? EMPTY
+  logs.set(paneId, { ...current, comments: [...current.comments, comment], picked: null })
+  notify(paneId)
+}
+
+export function updateComment(paneId: string, id: string, text: string): void {
+  const current = logs.get(paneId) ?? EMPTY
+  logs.set(paneId, {
+    ...current,
+    comments: current.comments.map((c) => (c.id === id ? { ...c, text } : c))
+  })
+  notify(paneId)
+}
+
+export function removeComment(paneId: string, id: string): void {
+  const current = logs.get(paneId) ?? EMPTY
+  logs.set(paneId, { ...current, comments: current.comments.filter((c) => c.id !== id) })
+  notify(paneId)
+}
+
+/** Drop the ones a session has taken, by id, leaving anything added since. */
+export function forgetComments(paneId: string, ids: string[]): void {
+  const gone = new Set(ids)
+  const current = logs.get(paneId) ?? EMPTY
+  logs.set(paneId, { ...current, comments: current.comments.filter((c) => !gone.has(c.id)) })
+  notify(paneId)
+}
+
+/** Every pane holding comments, so a send can find them wherever they are. */
+export function panesWithComments(): string[] {
+  return [...logs.entries()].filter(([, log]) => log.comments.length > 0).map(([id]) => id)
+}
+
 export function clearNet(paneId: string): void {
   const current = logs.get(paneId) ?? EMPTY
   logs.set(paneId, { ...current, entries: [] })
@@ -110,11 +162,79 @@ export function dropNet(paneId: string): void {
   views.delete(paneId)
 }
 
+/**
+ * Whether a Claude session is holding the line for comments.
+ *
+ * App-wide rather than per-pane: there is one bridge and one waiter, and every
+ * pane's send button wants to say the same thing about it.
+ */
+let bridgeWaiting = false
+const waitingListeners = new Set<() => void>()
+
+const subscribeWaiting = (fn: () => void): (() => void) => {
+  waitingListeners.add(fn)
+  return () => {
+    waitingListeners.delete(fn)
+  }
+}
+const readWaiting = (): boolean => bridgeWaiting
+
+export function setBridgeWaiting(waiting: boolean): void {
+  if (bridgeWaiting === waiting) return
+  bridgeWaiting = waiting
+  for (const fn of waitingListeners) fn()
+}
+
+export function useBridgeWaiting(): boolean {
+  return useSyncExternalStore(subscribeWaiting, readWaiting, readWaiting)
+}
+
 /** One pane's log, as React state. */
 export function useNetLog(paneId: string): PaneNetLog {
   const subscribe = useCallback((fn: () => void) => subscribeNet(paneId, fn), [paneId])
   const read = useCallback(() => netLogFor(paneId), [paneId])
   return useSyncExternalStore(subscribe, read, read)
+}
+
+/**
+ * How a pane offers its element picker to the rest of the app.
+ *
+ * A session running /grid-browser asks main for "the picker", main forwards it
+ * to the renderer, and the renderer has to reach into one particular pane's
+ * component to start it. The pane leaves a handle here for exactly that.
+ */
+const armers = new Map<string, () => void>()
+
+export function registerArm(paneId: string, arm: (() => void) | null): void {
+  if (arm) armers.set(paneId, arm)
+  else armers.delete(paneId)
+}
+
+export function armPicker(paneId: string): boolean {
+  const arm = armers.get(paneId)
+  if (!arm) return false
+  arm()
+  return true
+}
+
+/**
+ * Comments handed to a session and not yet acknowledged.
+ *
+ * The acknowledgement names a batch, not the comments in it, so the mapping
+ * has to be remembered here — and anything added while the session was reading
+ * survives, because only the ids that went are dropped.
+ */
+const pending = new Map<string, { paneId: string; ids: string[] }>()
+
+export function rememberBatch(batch: string, paneId: string, ids: string[]): void {
+  pending.set(batch, { paneId, ids })
+}
+
+export function settleBatch(batch: string): void {
+  const sent = pending.get(batch)
+  if (!sent) return
+  pending.delete(batch)
+  forgetComments(sent.paneId, sent.ids)
 }
 
 export function registerView(paneId: string, el: WebviewElement | null): void {

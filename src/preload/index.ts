@@ -11,7 +11,7 @@
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { CH, EV } from '../shared/ipc'
-import type { NetEntry } from '../shared/browser'
+import type { CommentBatch, NetEntry } from '../shared/browser'
 import type {
   GitState,
   PersistedState,
@@ -134,7 +134,14 @@ const api = {
       text: string,
       hint: string
     ): Promise<{ ok: true; path: string; dir: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke(CH.browserStash, text, hint)
+      ipcRenderer.invoke(CH.browserStash, text, hint),
+    /** Whether the grid holds a browser pane at all, for the bridge to answer with. */
+    bridgeSync: (state: { hasBrowser: boolean }): void => {
+      ipcRenderer.send(CH.browserBridgeSync, state)
+    },
+    /** Hand a pane's comments to whichever session is waiting for them. */
+    sendComments: (batch: CommentBatch): Promise<{ taken: boolean }> =>
+      ipcRenderer.invoke(CH.browserSendComments, batch)
   },
 
   window: {
@@ -183,6 +190,10 @@ const api = {
       cb: (paneId: string, status: { attached: boolean; reason: string | null }) => void
     ): Off => listen(EV.browserCapture, cb),
     browserFocus: (cb: (paneId: string) => void): Off => listen(EV.browserFocus, cb),
+    browserArmPicker: (cb: () => void): Off => listen(EV.browserArmPicker, cb),
+    browserCommentsTaken: (cb: (batch: string) => void): Off =>
+      listen(EV.browserCommentsTaken, cb),
+    browserWaiting: (cb: (waiting: boolean) => void): Off => listen(EV.browserWaiting, cb),
     windowMaximised: (cb: (maximised: boolean) => void): Off => listen(EV.winMaximised, cb),
     windowFocus: (cb: (focused: boolean) => void): Off => listen(EV.winFocus, cb),
     beforeQuit: (cb: () => void): Off => listen(EV.appBeforeQuit, cb),
