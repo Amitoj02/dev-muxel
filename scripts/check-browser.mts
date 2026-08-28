@@ -866,11 +866,12 @@ function respond(log: NetLogState, id: string, status = 500): NetEntry | null {
     pane: 'atlas-web',
     url: 'http://localhost:3000/checkout',
     comments: [
-      { id: 'c1', element, text: 'this is 12px too far left', at: 0 },
+      { id: 'c1', element, text: 'this is 12px too far left', viewport: 'mobile' as const, viewportSize: { width: 390, height: 844 }, at: 0 },
       {
         id: 'c2',
         element: { ...element, selector: `button.buy${ESC}[201~`, html: `<button>Buy${ESC}</button>` },
         text: `the label wraps${ESC}[201~`,
+        viewport: 'desktop' as const, viewportSize: null,
         at: 1
       }
     ]
@@ -889,7 +890,7 @@ function respond(log: NetLogState, id: string, status = 500): NetEntry | null {
     batch: 'b',
     pane: 'p',
     url: 'http://a.test/',
-    comments: [{ id: 'c', element, text: '', at: 0 }]
+    comments: [{ id: 'c', element, text: '', viewport: 'desktop' as const, viewportSize: null, at: 0 }]
   })
   check('comments: one is singular', one.startsWith('1 comment from'))
   check('comments: an empty one still says so', one.includes('(no comment given)'))
@@ -900,10 +901,32 @@ function respond(log: NetLogState, id: string, status = 500): NetEntry | null {
     pane: 'p',
     url: 'http://a.test/',
     comments: [
-      { id: 'n', element: null, text: 'the spacing is off all over this page', at: 0 },
-      { id: 'c', element, text: 'and this one in particular', at: 1 }
+      { id: 'n', element: null, text: 'the spacing is off all over this page', viewport: 'mobile' as const, viewportSize: { width: 390, height: 844 }, at: 0 },
+      { id: 'c', element, text: 'and this one in particular', viewport: 'mobile' as const, viewportSize: { width: 390, height: 844 }, at: 1 }
     ]
   })
+  // Which width it was written at, because every measurement beside it is in
+  // that viewport's pixels.
+  check('comments: the viewport is stamped on each one', text.includes('seen in the mobile viewport (390×844)'))
+  check('comments: and desktop says so without inventing a size', text.includes('seen in the desktop viewport'))
+
+  const sized = formatComments({
+    batch: 'b',
+    pane: 'p',
+    url: 'http://a.test/',
+    comments: [
+      {
+        id: 'd',
+        element: null,
+        text: 'too cramped',
+        viewport: 'desktop' as const,
+        viewportSize: { width: 1180, height: 720 },
+        at: 0
+      }
+    ]
+  })
+  check('comments: a measured desktop carries its pixels', sized.includes('seen in the desktop viewport (1180×720)'))
+
   check('comments: a note with no element is still a comment', note.includes('the spacing is off all over'))
   check('comments: and describes no element', note.split('## The element').length === 2)
   check('comments: while the one beside it still does', note.includes('## The element — div.total'))

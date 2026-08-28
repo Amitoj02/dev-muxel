@@ -1548,6 +1548,21 @@ body {
   font-style: italic;
 }
 
+.comment-row__where {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Which width it was written at — every measurement in it is in those pixels. */
+.comment-row__viewport {
+  flex: none;
+  font: 500 9.5px / 1 var(--font-mono);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
 .comment-note {
   flex: none;
   display: flex;

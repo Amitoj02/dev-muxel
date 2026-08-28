@@ -66,6 +66,24 @@ export type BrowserPaneProps = {
 /** Ports a dev server is most likely to be on, for the empty state. */
 const COMMON_PORTS = [3000, 5173, 8080]
 
+/**
+ * The CSS pixels the page was actually laid out at when a comment was written.
+ *
+ * A device preset fixes it. Desktop does not — it is whatever the pane happens
+ * to be — so the measured stage stands in, which is the same number the page
+ * itself saw, because at desktop the guest fills the stage unscaled.
+ */
+function measuredViewport(
+  preset: { width: number | null; height: number | null },
+  stage: { width: number; height: number }
+): { width: number; height: number } | null {
+  if (preset.width && preset.height) return { width: preset.width, height: preset.height }
+  if (stage.width > 0 && stage.height > 0) {
+    return { width: Math.round(stage.width), height: Math.round(stage.height) }
+  }
+  return null
+}
+
 export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   const ref = useRef<WebviewElement | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -416,6 +434,8 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
                 id: `cmt_${Date.now().toString(36)}`,
                 element: log.picked as PickedElement,
                 text,
+                viewport: preset.id,
+                viewportSize: measuredViewport(preset, stage),
                 at: Date.now()
               })
               resumeSelector()
@@ -450,10 +470,17 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
               id: `cmt_${Date.now().toString(36)}`,
               element: null,
               text,
+              viewport: preset.id,
+                viewportSize: measuredViewport(preset, stage),
               at: Date.now()
             })
           }
-          onSend={() => sendComments(pane.id, label, pane.url, log.comments)}
+          onSend={() => {
+            // Handing them over ends the run: the selector stays on between
+            // comments, but not past the moment they leave.
+            if (selectorOn.current) toggleSelector()
+            sendComments(pane.id, label, pane.url, log.comments)
+          }}
           onClose={() => setShowComments(false)}
         />
       )}

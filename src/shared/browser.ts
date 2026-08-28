@@ -284,6 +284,17 @@ export type PageComment = {
   element: PickedElement | null
   /** What the user typed. */
   text: string
+  /**
+   * Which device the page was laid out as when this was written.
+   *
+   * Not decoration: every measurement on the element beside it is in that
+   * viewport's pixels, so "48px tall" means something different depending on
+   * this, and a comment about a layout is nearly always a comment about a
+   * layout *at a width*.
+   */
+  viewport: ViewportId
+  /** The pixels it was laid out at, when the viewport fixes them. */
+  viewportSize: { width: number; height: number } | null
   /** Wall-clock ms, for ordering and for the list. */
   at: number
 }

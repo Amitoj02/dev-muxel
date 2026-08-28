@@ -289,6 +289,10 @@ export function formatComments(batch: CommentBatch, maxChars = DEFAULT_MAX_BODY_
   batch.comments.forEach((comment, i) => {
     const said = clean(comment.text).trim()
     out.push(`### ${i + 1}. ${said || '(no comment given)'}`)
+    const size = comment.viewportSize
+    out.push(
+      `seen in the ${clean(comment.viewport)} viewport${size ? ` (${size.width}×${size.height})` : ''}`
+    )
     out.push('')
     // A note about the page as a whole has nothing to describe under it.
     if (comment.element) {

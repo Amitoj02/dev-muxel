@@ -214,14 +214,22 @@ export function CommentsPanel({
           <div key={comment.id} className="comment-row">
             <span className="comment-row__n">{i + 1}</span>
             <div className="comment-row__body">
-              <span
-                className="comment-row__what"
-                data-note={comment.element === null}
-                title={comment.element?.selector ?? 'about the page as a whole'}
-              >
-                {comment.element
-                  ? comment.element.selector || comment.element.tag
-                  : 'the page as a whole'}
+              <span className="comment-row__where">
+                <span
+                  className="comment-row__what"
+                  data-note={comment.element === null}
+                  title={comment.element?.selector ?? 'about the page as a whole'}
+                >
+                  {comment.element
+                    ? comment.element.selector || comment.element.tag
+                    : 'the page as a whole'}
+                </span>
+                <span className="comment-row__viewport">
+                  {comment.viewport}
+                  {comment.viewportSize
+                    ? ` ${comment.viewportSize.width}×${comment.viewportSize.height}`
+                    : ''}
+                </span>
               </span>
               <textarea
                 className="comment-row__text"
