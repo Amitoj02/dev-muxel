@@ -48,24 +48,21 @@ import {
   IconArrowLeft,
   IconArrowRight,
   IconClose,
+  IconGlobe,
   IconPick,
   IconRefresh,
-  IconSend,
-  IconUnzoom,
-  IconZoom
+  IconSend
 } from './Icons'
 import { NetworkLog } from './NetworkLog'
 
 export type BrowserPaneProps = {
   pane: BrowserPaneModel
-  zoomed: boolean
-  onZoom: () => void
 }
 
 /** Ports a dev server is most likely to be on, for the empty state. */
 const COMMON_PORTS = [3000, 5173, 8080]
 
-export function BrowserPane({ pane, zoomed, onZoom }: BrowserPaneProps): React.JSX.Element {
+export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   const ref = useRef<WebviewElement | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const attached = useRef(false)
@@ -304,10 +301,8 @@ export function BrowserPane({ pane, zoomed, onZoom }: BrowserPaneProps): React.J
         pane={pane}
         loading={loading}
         nav={nav}
-        zoomed={zoomed}
         scale={scale}
         logOpen={showLog}
-        logCount={log.entries.length}
         logFailures={failures}
         picking={picking}
         onPick={() => void pick()}
@@ -317,7 +312,6 @@ export function BrowserPane({ pane, zoomed, onZoom }: BrowserPaneProps): React.J
         onReload={reload}
         onViewport={(viewport) => actions.patchBrowser(pane.id, { viewport })}
         onToggleLog={() => setShowLog((open) => !open)}
-        onZoom={onZoom}
       />
 
       {log.picked && (
@@ -402,10 +396,8 @@ type ToolbarProps = {
   pane: BrowserPaneModel
   loading: boolean
   nav: { back: boolean; forward: boolean }
-  zoomed: boolean
   scale: number
   logOpen: boolean
-  logCount: number
   logFailures: number
   picking: boolean
   onPick: () => void
@@ -415,7 +407,6 @@ type ToolbarProps = {
   onReload: (hard: boolean) => void
   onViewport: (viewport: ViewportId) => void
   onToggleLog: () => void
-  onZoom: () => void
 }
 
 function BrowserToolbar(props: ToolbarProps): React.JSX.Element {
@@ -525,6 +516,8 @@ function BrowserToolbar(props: ToolbarProps): React.JSX.Element {
         <IconPick size={11} />
       </button>
 
+      {/* No count on it: the pane header already carries every other number,
+          and a running total of requests is not one you act on. */}
       <button
         className="browser-net"
         data-open={props.logOpen}
@@ -532,18 +525,7 @@ function BrowserToolbar(props: ToolbarProps): React.JSX.Element {
         onClick={props.onToggleLog}
         title="The network log for this page"
       >
-        NET
-        <span className="browser-net__count">
-          {props.logFailures > 0 ? `${props.logFailures}!` : props.logCount}
-        </span>
-      </button>
-
-      <button
-        className="pane-btn"
-        onClick={props.onZoom}
-        title={props.zoomed ? 'Back to the grid — Esc' : 'Fill the window — Ctrl+Alt+Z'}
-      >
-        {props.zoomed ? <IconUnzoom /> : <IconZoom />}
+        <IconGlobe size={12} />
       </button>
     </div>
   )

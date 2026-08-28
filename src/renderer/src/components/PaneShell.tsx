@@ -134,9 +134,7 @@ export const PaneShell = memo(function PaneShell({
       {pane.kind === 'note' && (
         <NotePane note={note} focused={focused} onSend={sendToTerminal} />
       )}
-      {pane.kind === 'browser' && (
-        <BrowserPane pane={pane} zoomed={zoomed} onZoom={() => actions.toggleZoom(pane.id)} />
-      )}
+      {pane.kind === 'browser' && <BrowserPane pane={pane} />}
     </section>
   )
 })
