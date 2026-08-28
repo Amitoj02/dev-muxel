@@ -94,7 +94,7 @@ export const PaneShell = memo(function PaneShell({
           : null) ??
         [...usable].reverse().find((p) => p.kind === 'terminal' && getSession(p.id))
       if (!target) return false
-      window.grid.pty.write(target.id, text)
+      window.devmuxel.pty.write(target.id, text)
       actions.focusPane(target.id)
       getSession(target.id)?.focus()
       return true
@@ -134,7 +134,7 @@ export const PaneShell = memo(function PaneShell({
         onOpenEditor={
           pane.kind === 'terminal'
             ? () => {
-                void window.grid.open.editor(pane.cwd).then((r) => {
+                void window.devmuxel.open.editor(pane.cwd).then((r) => {
                   if (!r.ok) actions.toast(r.error ?? 'Could not open VS Code', 'error')
                 })
               }

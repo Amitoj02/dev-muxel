@@ -61,14 +61,14 @@ function candidates(): Candidate[] {
       label: 'PowerShell 7',
       paths: pwshPaths,
       args: ['-NoLogo'],
-      env: { TERM_PROGRAM: 'grid' }
+      env: { TERM_PROGRAM: 'devmuxel' }
     },
     {
       id: 'powershell',
       label: 'Windows PowerShell',
       paths: [path.join(sysRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')],
       args: ['-NoLogo'],
-      env: { TERM_PROGRAM: 'grid' }
+      env: { TERM_PROGRAM: 'devmuxel' }
     },
     {
       id: 'cmd',

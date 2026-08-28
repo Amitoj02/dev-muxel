@@ -146,9 +146,9 @@ const api = {
   },
 
   /**
-   * The `/grid-browser` skill. Read-only until the user asks for it: `install`
-   * is only ever reached from a button, and it writes nothing but the skill's
-   * own two files.
+   * The `/devmuxel-browser` skill. Read-only until the user asks for it:
+   * `install` is only ever reached from a button, and it writes nothing but the
+   * skill's own two files.
    */
   skill: {
     status: (): Promise<SkillStatus> => ipcRenderer.invoke(CH.skillStatus),
@@ -213,6 +213,6 @@ const api = {
   }
 }
 
-export type GridApi = typeof api
+export type DevMuxelApi = typeof api
 
-contextBridge.exposeInMainWorld('grid', api)
+contextBridge.exposeInMainWorld('devmuxel', api)

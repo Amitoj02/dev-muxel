@@ -1,9 +1,9 @@
 /**
  * Checks the porcelain=v2 parser against real repositories.
  *
- * Every field GRID puts in a pane header comes out of one `git status` call, so
- * a parsing slip shows up as a wrong number rather than an error. This walks a
- * set of fixture repos covering each state and asserts the numbers.
+ * Every field DevMuxel puts in a pane header comes out of one `git status`
+ * call, so a parsing slip shows up as a wrong number rather than an error. This
+ * walks a set of fixture repos covering each state and asserts the numbers.
  *
  *   npm run check:git
  *

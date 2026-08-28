@@ -3,7 +3,7 @@
  *
  * The awkward part is not the text — that is a pure function — it is *which*
  * Claude. A session already running was started with a model and an effort
- * level, and nothing pasted into it can change those; a session GRID starts
+ * level, and nothing pasted into it can change those; a session DevMuxel starts
  * for you has to be given them. So the dialog shows you which of the two you
  * are doing, and reads the flags back out of the command the terminal was
  * opened with rather than guessing.
@@ -76,7 +76,7 @@ export function SendToClaude({
       uids.map(async (uid) => {
         const entry = netLogFor(paneId).entries.find((e) => e.uid === uid)
         if (!entry) return [uid, null] as const
-        const result = await window.grid.browser.body(paneId, entry.uid)
+        const result = await window.devmuxel.browser.body(paneId, entry.uid)
         const body: SendableBody =
           result.ok && result.text ? { text: result.text, base64: Boolean(result.base64) } : null
         return [uid, body] as const
@@ -178,7 +178,7 @@ export function SendToClaude({
       return `Running ${describeInvocation(targetInvocation)}, but it is not accepting a paste right now — the capture goes to a file and one line names it`
     }
     if (targetInvocation.isClaude) {
-      return 'Set up for claude, but GRID never pressed Enter on it — the capture goes to a file and one line names it'
+      return 'Set up for claude, but DevMuxel never pressed Enter on it — the capture goes to a file and one line names it'
     }
     return 'Not a Claude session — the capture goes to a file and one line naming it is pasted'
   }
@@ -194,14 +194,14 @@ export function SendToClaude({
           actions.toast('Nowhere to open a terminal — declare a repository first', 'error')
           return
         }
-        const stashed = await window.grid.browser.stash(text, hint)
+        const stashed = await window.devmuxel.browser.stash(text, hint)
         if (!stashed.ok) {
           actions.toast(`Could not write the capture — ${stashed.error}`, 'error')
           return
         }
-        // Both end up on a command line, and two of the three shells GRID can
-        // open expand things inside double quotes. A refusal is better than a
-        // half-escaped path.
+        // Both end up on a command line, and two of the three shells DevMuxel
+        // can open expand things inside double quotes. A refusal is better than
+        // a half-escaped path.
         const quotedDir = quoteArg(stashed.dir)
         if (!quotedDir || !isSafeQuotedPath(stashed.path)) {
           actions.toast(
@@ -225,7 +225,7 @@ export function SendToClaude({
         actions.addTerminal({
           repoId: where.repoId,
           cwd: where.cwd,
-          startupCommand: `${command} "Read ${stashed.path} — it is a network capture from the GRID browser pane, and my question is at the top of it."`,
+          startupCommand: `${command} "Read ${stashed.path} — it is a network capture from the DevMuxel browser pane, and my question is at the top of it."`,
           runStartup: true,
           label: 'claude · capture'
         })
@@ -241,18 +241,19 @@ export function SendToClaude({
       }
 
       /**
-       * A capture is bytes a web page chose. Pasted into a Claude session it
-       * is one message; pasted into a bare shell, every line of it is a command
-       * sitting on the prompt. So a pane where GRID cannot confirm Claude is
-       * running gets one line naming a file instead — as does any capture too
-       * big to paste, which the CLI would fold into a placeholder that expires.
+       * A capture is bytes a web page chose. Pasted into a Claude session it is
+       * one message; pasted into a bare shell, every line of it is a command
+       * sitting on the prompt. So a pane where DevMuxel cannot confirm Claude
+       * is running gets one line naming a file instead — as does any capture
+       * too big to paste, which the CLI would fold into a placeholder that
+       * expires.
        */
       // Re-checked rather than trusted from render: bracketed paste is a mode
       // the program in the pane turns on and off, and nothing re-renders this
       // dialog when it does.
       let payload = text
       if (!willInline || !acceptsBracketedPaste(targetId)) {
-        const stashed = await window.grid.browser.stash(text, hint)
+        const stashed = await window.devmuxel.browser.stash(text, hint)
         if (!stashed.ok) {
           actions.toast(`Could not write the capture — ${stashed.error}`, 'error')
           return
@@ -422,7 +423,7 @@ export function SendToClaude({
                 {!willInline && (
                   <p className="field__hint" style={{ margin: '10px 0 0' }}>
                     This is what Claude reads. It is written to a file under
-                    {' %APPDATA%\\GRID\\captures'}; the pane itself gets one line naming that file.
+                    {' %APPDATA%\\DevMuxel\\captures'}; the pane itself gets one line naming that file.
                   </p>
                 )}
                 <pre className="send-preview">{text}</pre>
@@ -442,7 +443,7 @@ export function SendToClaude({
           <button
             className="btn"
             onClick={() => {
-              void window.grid.clipboard.write(text)
+              void window.devmuxel.clipboard.write(text)
               actions.toast('Copied')
             }}
           >
@@ -466,7 +467,7 @@ type Targets = {
   newSessionCwd: { cwd: string; repoId: string | null } | null
   /**
    * The repository's own claude command, parsed. A project that pins a model,
-   * an effort or a flag keeps all three when GRID opens a session on a
+   * an effort or a flag keeps all three when DevMuxel opens a session on a
    * capture — otherwise "a new Claude session" would quietly be a different
    * Claude from the one that repository always uses.
    */
@@ -538,7 +539,7 @@ function useTargets(app: ReturnType<typeof useApp>, pane: Pane | null): Targets 
  * Whether the program in this pane has told the terminal it will read a paste
  * as one thing.
  *
- * This is the decisive test, and it is better than anything GRID can infer
+ * This is the decisive test, and it is better than anything DevMuxel can infer
  * about what was launched: bracketed paste is a mode the *running program*
  * turns on, so it is the CLI itself saying a multi-line paste will arrive as a
  * message rather than as a stack of commands on a prompt. A shell that has
@@ -551,7 +552,10 @@ function acceptsBracketedPaste(paneId: string): boolean {
 }
 
 type SessionClaude = {
-  /** GRID pressed Enter on a claude command here, and the shell is still up. */
+  /**
+   * DevMuxel pressed Enter on a claude command here, and the shell is still
+   * up.
+   */
   running: boolean
   invocation: ReturnType<typeof parseClaudeInvocation>
 }
@@ -567,7 +571,7 @@ type SessionClaude = {
  * states the pane is a bare shell whose configuration says `claude`, and a
  * multi-line paste into a shell is a stack of commands on the prompt.
  *
- * So the flag GRID records when it actually pressed Enter is the one that
+ * So the flag DevMuxel records when it actually pressed Enter is the one that
  * counts, and anything short of it falls through to the file path.
  */
 function claudeIn(app: ReturnType<typeof useApp>, pane: Pane | null): SessionClaude {

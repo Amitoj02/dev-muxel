@@ -1,5 +1,6 @@
 /**
- * Which key chords belong to GRID rather than to the program running in a pane.
+ * Which key chords belong to DevMuxel rather than to the program running in a
+ * pane.
  *
  * This has to be one shared list because two places need to agree exactly:
  *
@@ -18,7 +19,7 @@
  * would stop those users typing `@`, `\` or `~` into their terminals.
  */
 
-/** Ctrl+Alt chords GRID binds. */
+/** Ctrl+Alt chords DevMuxel binds. */
 const CTRL_ALT_KEYS = new Set([
   't', // new terminal
   'g', // new browser pane
@@ -98,6 +99,6 @@ export function classifyChord(e: KeyboardEvent): ChordKind {
 }
 
 /** True when the terminal must keep its hands off this key. */
-export function isGridChord(e: KeyboardEvent): boolean {
+export function isAppChord(e: KeyboardEvent): boolean {
   return classifyChord(e) !== null
 }

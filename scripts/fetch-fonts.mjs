@@ -1,5 +1,5 @@
 /**
- * Re-vendors the two fonts GRID uses.
+ * Re-vendors the two fonts DevMuxel uses.
  *
  * They are vendored rather than linked from Google Fonts so the renderer never
  * touches the network: the CSP can stay strict, cold start has no round trip,

@@ -1,10 +1,10 @@
 /**
  * The repository manager.
  *
- * Declaring paths is the first thing you do in GRID and the thing you do least
- * often afterwards, so it lives in an overlay rather than eating grid space
- * permanently. Everything a repo needs is here: where it is, which shell it
- * opens with, and the command to run when a terminal lands in it — that last
+ * Declaring paths is the first thing you do in DevMuxel and the thing you do
+ * least often afterwards, so it lives in an overlay rather than eating grid
+ * space permanently. Everything a repo needs is here: where it is, which shell
+ * it opens with, and the command to run when a terminal lands in it — that last
  * one is what turns "open a terminal" into "start Claude in this repo".
  */
 
@@ -32,9 +32,9 @@ export function RepositoriesPanel(): React.JSX.Element {
   )
 
   const addFolder = async (): Promise<void> => {
-    const picked = await window.grid.dialog.pickFolder('Add a repository')
+    const picked = await window.devmuxel.dialog.pickFolder('Add a repository')
     if (!picked) return
-    const probe = await window.grid.repo.probe(picked)
+    const probe = await window.devmuxel.repo.probe(picked)
     const repo = actions.addRepo({
       name: probe.name,
       path: probe.root ?? picked
@@ -46,11 +46,11 @@ export function RepositoriesPanel(): React.JSX.Element {
   }
 
   const scanFolder = async (): Promise<void> => {
-    const picked = await window.grid.dialog.pickFolder('Scan a folder for repositories')
+    const picked = await window.devmuxel.dialog.pickFolder('Scan a folder for repositories')
     if (!picked) return
     setScanning(true)
     try {
-      const results = await window.grid.repo.scan(picked)
+      const results = await window.devmuxel.repo.scan(picked)
       const known = new Set(app.repos.map((r) => normalisePath(r.path)))
       setFound(
         results.map((r) => ({ ...r, alreadyAdded: known.has(normalisePath(r.path)) }))
@@ -131,7 +131,7 @@ export function RepositoriesPanel(): React.JSX.Element {
           </button>
           <button
             className="btn btn--ghost"
-            onClick={() => void window.grid.git.refresh()}
+            onClick={() => void window.devmuxel.git.refresh()}
             title="Re-read every repository now"
           >
             <IconRefresh size={11} /> Refresh
@@ -229,14 +229,14 @@ function RepoRow({
           <button
             className="icon-btn"
             title="Open in VS Code"
-            onClick={() => void window.grid.open.editor(repo.path)}
+            onClick={() => void window.devmuxel.open.editor(repo.path)}
           >
             <span style={{ font: '600 9.5px/1 var(--font-ui)' }}>VS</span>
           </button>
           <button
             className="icon-btn"
             title="Show in Explorer"
-            onClick={() => void window.grid.open.folder(repo.path)}
+            onClick={() => void window.devmuxel.open.folder(repo.path)}
           >
             <IconFolder size={12} />
           </button>
@@ -245,7 +245,7 @@ function RepoRow({
           </button>
           <button
             className="icon-btn icon-btn--danger"
-            title="Remove from GRID (the folder is untouched)"
+            title="Remove from DevMuxel (the folder is untouched)"
             onClick={() => actions.removeRepo(repo.id)}
           >
             <IconTrash size={12} />

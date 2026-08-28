@@ -1,5 +1,5 @@
-appId: me.sanjeet.grid
-productName: GRID
+appId: me.sanjeet.devmuxel
+productName: DevMuxel
 copyright: Copyright (c) 2026 Sanjeet
 
 directories:
@@ -44,7 +44,7 @@ electronDownload:
   cache: .electron-cache
 
 win:
-  executableName: GRID
+  executableName: DevMuxel
   target:
     - target: nsis
       arch: [x64]
@@ -57,7 +57,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   # Uninstalling should not take your declared repositories and notes with it.
   deleteAppDataOnUninstall: false
-  shortcutName: GRID
+  shortcutName: DevMuxel
   # Explicit rather than relying on the defaults: these two are the whole point
   # of installing rather than running from the build folder.
   createDesktopShortcut: true

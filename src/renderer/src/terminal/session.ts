@@ -54,7 +54,7 @@ export type SessionCallbacks = {
    * which is a CLI exiting back to its shell.
    */
   onShellBack: () => void
-  /** A GRID shortcut was pressed inside the terminal; the app handles it. */
+  /** A DevMuxel shortcut was pressed in the terminal; the app handles it. */
   onShortcut: (e: KeyboardEvent) => boolean
 }
 
@@ -163,13 +163,13 @@ class WriteOnlyClipboard implements IClipboardProvider {
   }
 
   async writeText(_selection: ClipboardSelectionType, text: string): Promise<void> {
-    if (typeof text === 'string' && text.length > 0) await window.grid.clipboard.write(text)
+    if (typeof text === 'string' && text.length > 0) await window.devmuxel.clipboard.write(text)
   }
 }
 
 /** Only ever hand the OS a web URL; the terminal can print anything at all. */
 function openLink(uri: string): void {
-  if (/^https?:\/\//i.test(uri)) void window.grid.open.external(uri)
+  if (/^https?:\/\//i.test(uri)) void window.devmuxel.open.external(uri)
 }
 
 // ---------------------------------------------------------------------------
@@ -197,7 +197,7 @@ export class TerminalSession {
   /** Set once OSC 133 shows up, so the idle heuristic can stand down. */
   private hasShellIntegration = false
   /**
-   * Where the bracketed-paste watch has got to: nothing started by GRID,
+   * Where the bracketed-paste watch has got to: nothing started by DevMuxel,
    * something started and not yet claiming the terminal, or claiming it.
    */
   private pasteWatch: 'idle' | 'armed' | 'claimed' = 'idle'
@@ -246,8 +246,8 @@ export class TerminalSession {
 
     this.wireShellIntegration()
 
-    // Keys GRID owns must be refused here, not merely ignored. Returning false
-    // makes xterm bail out before its own cancel(), which would otherwise
+    // Keys DevMuxel owns must be refused here, not merely ignored. Returning
+    // false makes xterm bail out before its own cancel(), which would otherwise
     // stopPropagation() and stop the shortcut ever reaching the window.
     // Everything else belongs to whatever is running in the pane — including
     // Escape, which Claude and every TUI need.
@@ -338,15 +338,15 @@ export class TerminalSession {
   }
 
   /**
-   * GRID has just pressed Enter on a command; watch for the program it started
-   * taking the terminal, and then letting go of it again.
+   * DevMuxel has just pressed Enter on a command; watch for the program it
+   * started taking the terminal, and then letting go of it again.
    */
   armShellWatch(): void {
     this.pasteWatch = 'armed'
   }
 
   /**
-   * Notice the moment a program GRID started hands the terminal back.
+   * Notice the moment a program DevMuxel started hands the terminal back.
    *
    * Bracketed paste is turned on by the program that wants it and off again as
    * it exits, so a falling edge looks like the CLI leaving. It is not, on its
@@ -371,7 +371,7 @@ export class TerminalSession {
     this.cb.onShellBack()
   }
 
-  /** Write GRID's own text into the pane (never echoed back to the pty). */
+  /** Write DevMuxel's own text into the pane (never echoed back to the pty). */
   writeLocal(text: string): void {
     if (!this.disposed) this.term.write(text)
   }

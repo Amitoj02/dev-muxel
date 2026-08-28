@@ -71,7 +71,7 @@ const STYLE_PROPS = [
  */
 function pickerSource(maxText: number, maxHtml: number, props: string[]): string {
   return `(function () {
-  if (window.__gridPickCancel) { try { window.__gridPickCancel() } catch (e) {} }
+  if (window.__devmuxelPickCancel) { try { window.__devmuxelPickCancel() } catch (e) {} }
 
   return new Promise(function (resolve) {
     var STYLE_PROPS = ${JSON.stringify(props)};
@@ -180,7 +180,7 @@ function pickerSource(maxText: number, maxHtml: number, props: string[]): string
       if (box.parentNode) box.parentNode.removeChild(box);
       if (tag.parentNode) tag.parentNode.removeChild(tag);
       root.style.cursor = previousCursor;
-      window.__gridPickCancel = null;
+      window.__devmuxelPickCancel = null;
     }
 
     function onMove(e) {
@@ -218,7 +218,7 @@ function pickerSource(maxText: number, maxHtml: number, props: string[]): string
 
     function onCancel() { cleanup(); resolve(null) }
 
-    window.__gridPickCancel = onCancel;
+    window.__devmuxelPickCancel = onCancel;
 
     document.addEventListener('mousemove', onMove, true);
     document.addEventListener('mousedown', onDown, true);
@@ -249,7 +249,7 @@ export async function pickElement(view: WebviewElement): Promise<PickedElement |
 /** Take the page back out of pick mode from the outside. */
 export function cancelPick(view: WebviewElement): void {
   void view
-    .executeJavaScript('window.__gridPickCancel && window.__gridPickCancel(), 0')
+    .executeJavaScript('window.__devmuxelPickCancel && window.__devmuxelPickCancel(), 0')
     .catch(() => {
       /* the page is gone, which is its own kind of cancelled */
     })
@@ -257,7 +257,7 @@ export function cancelPick(view: WebviewElement): void {
 
 /**
  * The guest can return anything at all, so the shape is checked rather than
- * asserted — this crosses a process boundary from a page GRID does not own.
+ * asserted — this crosses a process boundary from a page DevMuxel does not own.
  */
 function isPicked(value: unknown): value is PickedElement {
   if (!value || typeof value !== 'object') return false

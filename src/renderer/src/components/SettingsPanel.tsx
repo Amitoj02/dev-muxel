@@ -257,7 +257,7 @@ export function SettingsPanel(): React.JSX.Element {
               className="field__hint"
               style={{ gridColumn: '1 / -1', margin: 0 }}
             >
-              GRID also re-reads a repository the moment its .git directory changes, so these
+              DevMuxel also re-reads a repository the moment its .git directory changes, so these
               only matter for changes made outside git itself.
             </p>
           </div>
@@ -293,7 +293,7 @@ export function SettingsPanel(): React.JSX.Element {
                 ))}
               </select>
               <span className="field__hint">
-                Only used when GRID starts one for you. A session already running keeps the flags
+                Only used when DevMuxel starts one for you. A session already running keeps the flags
                 it was started with.
               </span>
             </label>

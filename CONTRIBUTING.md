@@ -1,8 +1,8 @@
-# Contributing to GRID
+# Contributing to DevMuxel
 
-Thanks for looking. GRID is a small, deliberate codebase: one screen, no router,
-no state library, and a short list of dependencies. The notes below are what you
-need before changing anything in it.
+Thanks for looking. DevMuxel is a small, deliberate codebase: one screen, no
+router, no state library, and a short list of dependencies. The notes below are
+what you need before changing anything in it.
 
 ## Getting set up
 
@@ -10,21 +10,21 @@ need before changing anything in it.
 npm install
 npm run dev              # electron-vite dev server, hot reload
 npm run build            # typecheck + bundle to out/
-npm run build:unpacked   # release/<version>/win-unpacked/GRID.exe, no installer
+npm run build:unpacked   # release/<version>/win-unpacked/, no installer
 npm run build:win        # installer + portable
 npm run icon             # regenerate build/icon.ico
 ```
 
-`grid.cmd` runs the built output through Electron's own signed binary, which is
-handy on machines where Smart App Control blocks the packaged exe.
+`devmuxel.cmd` runs the built output through Electron's own signed binary,
+which is handy on machines where Smart App Control blocks the packaged exe.
 
 ## How it is put together
 
 ```
 src/shared/     types, the IPC channel list, the pure layout engine, and the
                 pure half of the browser pane (browser.ts, claude.ts)
-resources/      the /grid-browser skill, shipped with the app and inlined into
-                the main bundle with `?raw`
+resources/      the /devmuxel-browser skill, shipped with the app and
+                inlined into the main bundle with `?raw`
 src/main/       ptys, git, the filesystem, the window, menu accelerators, and
                 the browser guests' debugger and hardening (main/browser/)
 src/preload/    the contextBridge — a fixed, typed list of verbs
@@ -71,8 +71,8 @@ arbitrary subset of what you pressed. Accelerators are evaluated before the key
 reaches the page. The menu itself is never drawn. `src/main/menu.ts` owns the
 bindings; `src/renderer/src/lib/useShortcuts.ts` turns an action name into a
 change in the grid, and `src/renderer/src/lib/chords.ts` is the shared list of
-what GRID claims — every chord there has to be refused by xterm too, or it never
-reaches the window.
+what DevMuxel claims — every chord there has to be refused by xterm too, or it
+never reaches the window.
 
 **Closing something parks it rather than killing it.** For five seconds a
 closed pane — or every pane of a closed *grid* — comes out of its tree but
@@ -121,13 +121,14 @@ not a security boundary. That hardening lives in `src/main/browser/guest.ts`
 and is the first thing to read before changing anything about guests.
 
 Comments go the other way round from everything else here, and that is the
-point of them. GRID does not push them at a session; a session comes and asks.
-`/grid-browser` runs a script that talks to the running app over a loopback
-port GRID publishes in `bridge.json` — a running Electron app cannot be driven
-by pointing at its executable, so it listens instead, on a port the OS picks
-behind a token generated fresh each launch, with the manifest removed on the
-way out. One waiter at a time, because two sessions holding the line for the
-same comments is a race with no right answer. `src/main/browser/bridge.ts`.
+point of them. DevMuxel does not push them at a session; a session comes and
+asks. `/devmuxel-browser` runs a script that talks to the running app over a
+loopback port DevMuxel publishes in `bridge.json` — a running Electron app
+cannot be driven by pointing at its executable, so it listens instead, on a
+port the OS picks behind a token generated fresh each launch, with the manifest
+removed on the way out. One waiter at a time, because two sessions holding the
+line for the same comments is a race with no right answer.
+`src/main/browser/bridge.ts`.
 
 The element picker is a script injected into the guest with
 `executeJavaScript`, and it has to be: hit-testing an element inside a separate
@@ -156,8 +157,8 @@ whatever is running in that pane.
 For the same reason a capture is only pasted in whole when three things hold at
 once, and any one of them failing sends it to a file instead:
 
-- GRID itself typed a `claude` command into that pane **and pressed Enter** —
-  recorded as `ranStartup` on the pane's runtime. A repository's command on
+- DevMuxel itself typed a `claude` command into that pane **and pressed
+  Enter** — recorded as `ranStartup` on the pane's runtime. A repository's command on
   open is typed into every terminal whether or not "press Enter for me" is
   set, and a restored pane does not replay it at all, so the configuration
   alone says nothing about what is running.
@@ -198,7 +199,7 @@ of locking up the window.
 npm run typecheck     # main+preload and renderer, separately
 npm run lint
 npm run fixtures:git  # builds .git-fixtures/ — dirty, clean, behind, conflicted
-npm run check         # layout engine + git parser + browser pane
+npm run check         # layout engine + git parser + browser pane + migration
 ```
 
 `scripts/check-layout.mts` asserts the layout engine's invariants — that rects
@@ -208,8 +209,12 @@ where it was. `scripts/check-git.mts` asserts the porcelain=v2 parser against
 real repositories in every state a header can show. `scripts/check-browser.mts`
 asserts the browser pane's pure half: what the URL bar will and will not load,
 the CDP-to-log reducer including redirect chains and the ring buffer, and the
-exact text sent to Claude — including the credentials it takes out of it. All
-three run under Node's type stripping, so there is no build step.
+exact text sent to Claude — including the credentials it takes out of it.
+`scripts/check-migrate.mts` asserts the one-time move of a pre-rename `GRID`
+profile onto the DevMuxel name: that everything comes across, that the browser
+partition follows `BROWSER_PARTITION`, that a profile already under the new
+name is never clobbered, and that re-running it changes nothing. All four run
+under Node's type stripping, so there is no build step.
 
 That last one is why `src/shared/browser.ts` and `src/shared/claude.ts` import
 each other's *types* only. Type stripping erases a type import but would have to
@@ -236,9 +241,9 @@ Regenerate with `npm run fonts`; their SIL OFL 1.1 licences are in
 
 **node-pty prints `Error: AttachConsole failed` on every pane close.** Its
 console-process-list helper is broken on Windows 11 build 26200 and dies
-immediately. It is noise, not a failure — the pty is killed correctly, and GRID
-force-reaps the process tree 1.5s later in case a grandchild allocated its own
-console.
+immediately. It is noise, not a failure — the pty is killed correctly, and
+DevMuxel force-reaps the process tree 1.5s later in case a grandchild allocated
+its own console.
 
 **`npmRebuild` is off and must stay off.** node-pty 1.1.0 ships N-API prebuilds,
 which are ABI-stable across Node and Electron, so there is nothing to rebuild —

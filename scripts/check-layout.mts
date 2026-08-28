@@ -1,10 +1,10 @@
 /**
  * Checks the split-tree layout engine.
  *
- * The grid is the one place in GRID where a subtle bug is invisible rather than
- * loud: a tree that fails to normalise looks fine until a pane is 3px wide, and
- * a rect that overlaps its neighbour just draws on top of it. So the invariants
- * are asserted directly.
+ * The grid is the one place in DevMuxel where a subtle bug is invisible rather
+ * than loud: a tree that fails to normalise looks fine until a pane is 3px
+ * wide, and a rect that overlaps its neighbour just draws on top of it. So the
+ * invariants are asserted directly.
  *
  *   npm run check:layout
  *

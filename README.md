@@ -1,7 +1,6 @@
-# GRID
+# DevMuxel
 
-A tiling grid of terminals, one per repository — for running several Claude CLI
-sessions at once without losing track of which is which.
+**A repo-aware tiled workspace for terminals, browsers, and AI coding sessions.**
 
 ```
 ┌─ atlas-api  main  *3 +2 ───────────┬─ ledger-cli  fix/parse  clean ────┐
@@ -28,8 +27,8 @@ Windows only.
 
 ## Install
 
-Grab `grid-<version>-setup.exe` from the
-[Releases page](https://github.com/Amitoj02/grid-cli/releases) and run it. It
+Grab `dev-muxel-<version>-setup.exe` from the
+[Releases page](https://github.com/Amitoj02/dev-muxel/releases) and run it. It
 installs to your own user folder, so it never asks for admin, and it adds Start
 Menu and desktop shortcuts. There is a portable `.exe` there too — one file, no
 install, no shortcuts.
@@ -41,13 +40,13 @@ npm install
 npm run build:win     # installer and portable, into release/<version>/
 ```
 
-Your repositories, notes and layout live in `%APPDATA%\GRID`. Uninstalling
+Your repositories, notes and layout live in `%APPDATA%\DevMuxel`. Uninstalling
 leaves them alone.
 
 ## Start here
 
 **1. Declare your repositories.** `Repositories` in the titlebar, then
-`Add repository` for one folder — or `Scan folder` to point GRID at the
+`Add repository` for one folder — or `Scan folder` to point DevMuxel at the
 directory your projects live in and take them all at once. Dropping a folder
 anywhere on the window works too.
 
@@ -83,7 +82,8 @@ came in, without taking the first one apart.
 Nothing in a tab stops when you leave it. Shells keep running, terminals keep
 their scrollback, browser panes keep the page they were on, and a pane that
 starts wanting you puts a red dot on its tab and counts towards the `N waiting`
-in the titlebar — click that and GRID brings the right grid forward on its own.
+in the titlebar — click that and DevMuxel brings the right grid forward on its
+own.
 
 `+` opens a new one. Double-click a tab to name it, drag it along the strip to
 reorder it, and drag a *pane* by its header onto a tab to move it into that
@@ -92,7 +92,7 @@ grid — nothing restarts, exactly like dragging one across a grid.
 `Ctrl+Alt+Shift+T` opens a grid, `Ctrl+PageUp` / `Ctrl+PageDown` move between
 them, `Ctrl+Alt+Shift+W` closes one. Closing a grid is undoable for five
 seconds like anything else — `Ctrl+Shift+T` puts it back with everything in it
-still running — and GRID asks first anyway when something in it is.
+still running — and DevMuxel asks first anyway when something in it is.
 
 ## Reading a pane
 
@@ -109,9 +109,9 @@ near-identical panes.
 
 A pane that rings the bell, or goes quiet on a question while you are looking
 elsewhere, glows red and grows a `NEEDS YOU` badge, and the titlebar shows
-`N waiting` — click that to jump straight to it. If GRID itself is behind
+`N waiting` — click that to jump straight to it. If DevMuxel itself is behind
 another window, its taskbar button flashes and the window title becomes
-`N waiting - GRID`.
+`N waiting - DevMuxel`.
 
 ## Closed one by mistake
 
@@ -172,16 +172,17 @@ will happily give you.
 
 ### Handing them to Claude
 
-The comments bar carries `add the skill` when the `/grid-browser` skill is
+The comments bar carries `add the skill` when the `/devmuxel-browser` skill is
 missing from your machine, or `update the skill` when the copy you have was not
-written by this build of GRID. Press it and GRID writes both halves — the skill
-and the script it runs — into `~/.claude/skills/grid-browser/`. The button is
-gone once they match, because there is then nothing to do about it.
+written by this build of DevMuxel. Press it and DevMuxel writes both halves —
+the skill and the script it runs — into `~/.claude/skills/devmuxel-browser/`.
+The button is gone once they match, because there is then nothing to do about
+it.
 
 In any Claude session, anywhere on the machine, run:
 
 ```
-/grid-browser
+/devmuxel-browser
 ```
 
 It arms the picker in the browser pane you last used and then waits. Mark the
@@ -194,11 +195,11 @@ prefer — the send button is always there, and it says when a session is
 waiting. If no browser pane is open, the skill fails and says so rather than
 waiting for something that cannot happen.
 
-The skill lives in `~/.claude/skills/grid-browser/`, and ships with GRID in
-[`resources/skills/`](./resources/skills) so the two halves cannot drift apart.
-It finds GRID through a loopback port and token that GRID writes to
-`%APPDATA%\GRID\bridge.json` while it runs, so it works wherever GRID was
-started from — and stops working the moment GRID does.
+The skill lives in `~/.claude/skills/devmuxel-browser/`, and ships with
+DevMuxel in [`resources/skills/`](./resources/skills) so the two halves cannot
+drift apart. It finds DevMuxel through a loopback port and token that DevMuxel
+writes to `%APPDATA%\DevMuxel\bridge.json` while it runs, so it works wherever
+DevMuxel was started from — and stops working the moment DevMuxel does.
 
 ### The network log
 
@@ -214,8 +215,8 @@ in is still there afterwards. `Clear` empties it.
 ### Sending one to Claude
 
 Tick the requests you care about and press `Claude`, or open a row and use
-`Send to Claude`. Write what you actually want to know, and GRID formats the
-exchange underneath it and pastes the lot into a session:
+`Send to Claude`. Write what you actually want to know, and DevMuxel formats
+the exchange underneath it and pastes the lot into a session:
 
 - **A session already running** gets it pasted in, without a trailing newline —
   you read it back and press Enter yourself. It answers with whatever `--model`
@@ -234,20 +235,20 @@ prints the text before it goes anywhere, and `Copy instead` puts it on the
 clipboard rather than in a pane. Tick *Include credentials* when the auth
 header is the bug.
 
-Two cases get one line naming a file in `%APPDATA%\GRID\captures\` instead of
-the capture itself: anything longer than about nine thousand characters, which
-the CLI would fold into a placeholder that can expire; and any pane where GRID
-did not itself start Claude and watch it take the Enter — a multi-line paste
-into a bare shell is not one message, it is a stack of commands sitting on the
-prompt. The dialog says which of the two is about to happen, in the line under
-the target.
+Two cases get one line naming a file in `%APPDATA%\DevMuxel\captures\` instead
+of the capture itself: anything longer than about nine thousand characters,
+which the CLI would fold into a placeholder that can expire; and any pane where
+DevMuxel did not itself start Claude and watch it take the Enter — a multi-line
+paste into a bare shell is not one message, it is a stack of commands sitting
+on the prompt. The dialog says which of the two is about to happen, in the line
+under the target.
 
 That is stricter than it looks. A repository's `Command on open` is typed into
 every terminal it opens whether or not *Press Enter for me* is set, so a pane
-can be configured for `claude` and still be sitting at a shell prompt — GRID
-goes by what actually ran, notices when a CLI exits and hands the terminal
-back, and checks that the program in the pane is accepting pastes at the moment
-you press Send.
+can be configured for `claude` and still be sitting at a shell prompt —
+DevMuxel goes by what actually ran, notices when a CLI exits and hands the
+terminal back, and checks that the program in the pane is accepting pastes at
+the moment you press Send.
 
 ## Notes
 
@@ -259,11 +260,11 @@ lists everything you have kept, and reopens it.
 
 ## Settings
 
-`Settings` in the titlebar, saved as you change them: font and size, the default
-shell, how long a pane has to stay quiet before it counts as "needs you",
-whether closing a busy pane asks first, how much of the last session comes back
-when you launch, how many requests a browser pane keeps, and the model and
-effort GRID starts a Claude session with when you ask it to.
+`Settings` in the titlebar, saved as you change them: font and size, the
+default shell, how long a pane has to stay quiet before it counts as "needs
+you", whether closing a busy pane asks first, how much of the last session
+comes back when you launch, how many requests a browser pane keeps, and the
+model and effort DevMuxel starts a Claude session with when you ask it to.
 
 ## Keyboard
 
@@ -293,10 +294,10 @@ no CLI binds either.
 
 ## If something goes wrong
 
-**Windows blocked GRID.exe.** Smart App Control is enforced on some machines and
-judges each binary by its hash, so an unsigned build that ran yesterday can be
+**Windows blocked DevMuxel.exe.** Smart App Control is enforced on some
+machines and judges each binary by its hash, so an unsigned build that ran yesterday can be
 blocked today with *"An Application Control policy has blocked this file"*. If
-you built from source, `grid.cmd` runs the same app through Electron's own
+you built from source, `devmuxel.cmd` runs the same app through Electron's own
 signed binary and is unaffected.
 
 **`Ctrl+Alt+R` does nothing.** It is a popular global hotkey — screen recorders
@@ -315,6 +316,6 @@ so and offers `Reattach`; close DevTools first.
 MIT licensed — see [LICENSE](./LICENSE). The bundled fonts are SIL OFL 1.1;
 their licences are in [`licenses/`](./licenses).
 
-Want to work on GRID rather than just use it?
+Want to work on DevMuxel rather than just use it?
 [CONTRIBUTING.md](./CONTRIBUTING.md) has the architecture, the checks, and the
 handful of decisions worth knowing before changing anything.

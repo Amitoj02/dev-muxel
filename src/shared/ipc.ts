@@ -8,73 +8,75 @@
 
 export const CH = {
   // renderer -> main, request/response
-  stateLoad: 'grid:state:load',
-  stateSave: 'grid:state:save',
-  settingsPatch: 'grid:settings:patch',
+  stateLoad: 'devmuxel:state:load',
+  stateSave: 'devmuxel:state:save',
+  settingsPatch: 'devmuxel:settings:patch',
 
-  ptySpawn: 'grid:pty:spawn',
-  ptyWrite: 'grid:pty:write',
-  ptyResize: 'grid:pty:resize',
-  ptyAck: 'grid:pty:ack',
-  ptyKill: 'grid:pty:kill',
+  ptySpawn: 'devmuxel:pty:spawn',
+  ptyWrite: 'devmuxel:pty:write',
+  ptyResize: 'devmuxel:pty:resize',
+  ptyAck: 'devmuxel:pty:ack',
+  ptyKill: 'devmuxel:pty:kill',
 
-  gitRefresh: 'grid:git:refresh',
-  gitSnapshot: 'grid:git:snapshot',
-  gitSetRepos: 'grid:git:setRepos',
+  gitRefresh: 'devmuxel:git:refresh',
+  gitSnapshot: 'devmuxel:git:snapshot',
+  gitSetRepos: 'devmuxel:git:setRepos',
 
-  dialogPickFolder: 'grid:dialog:pickFolder',
-  repoScan: 'grid:repo:scan',
-  repoProbe: 'grid:repo:probe',
+  dialogPickFolder: 'devmuxel:dialog:pickFolder',
+  repoScan: 'devmuxel:repo:scan',
+  repoProbe: 'devmuxel:repo:probe',
 
-  openEditor: 'grid:open:editor',
-  openFolder: 'grid:open:folder',
-  openExternal: 'grid:open:external',
-  editorAvailable: 'grid:open:editorAvailable',
+  openEditor: 'devmuxel:open:editor',
+  openFolder: 'devmuxel:open:folder',
+  openExternal: 'devmuxel:open:external',
+  editorAvailable: 'devmuxel:open:editorAvailable',
 
-  shellsList: 'grid:shells:list',
+  shellsList: 'devmuxel:shells:list',
 
-  browserAttach: 'grid:browser:attach',
-  browserDetach: 'grid:browser:detach',
-  browserEmulate: 'grid:browser:emulate',
-  browserEntries: 'grid:browser:entries',
-  browserBody: 'grid:browser:body',
-  browserClear: 'grid:browser:clear',
-  browserStash: 'grid:browser:stash',
+  browserAttach: 'devmuxel:browser:attach',
+  browserDetach: 'devmuxel:browser:detach',
+  browserEmulate: 'devmuxel:browser:emulate',
+  browserEntries: 'devmuxel:browser:entries',
+  browserBody: 'devmuxel:browser:body',
+  browserClear: 'devmuxel:browser:clear',
+  browserStash: 'devmuxel:browser:stash',
   /** Renderer tells main whether there is a browser pane to arm at all. */
-  browserBridgeSync: 'grid:browser:bridgeSync',
+  browserBridgeSync: 'devmuxel:browser:bridgeSync',
   /** A pane's send button, handing its comments to a waiting session. */
-  browserSendComments: 'grid:browser:sendComments',
+  browserSendComments: 'devmuxel:browser:sendComments',
 
-  /** Is the /grid-browser skill installed for this user, and is it current? */
-  skillStatus: 'grid:skill:status',
-  skillInstall: 'grid:skill:install',
+  /**
+   * Is the /devmuxel-browser skill installed for this user, and is it current?
+   */
+  skillStatus: 'devmuxel:skill:status',
+  skillInstall: 'devmuxel:skill:install',
 
-  winMinimise: 'grid:win:minimise',
-  winToggleMaximise: 'grid:win:toggleMaximise',
-  winClose: 'grid:win:close',
-  winIsMaximised: 'grid:win:isMaximised',
-  winAttention: 'grid:win:attention',
+  winMinimise: 'devmuxel:win:minimise',
+  winToggleMaximise: 'devmuxel:win:toggleMaximise',
+  winClose: 'devmuxel:win:close',
+  winIsMaximised: 'devmuxel:win:isMaximised',
+  winAttention: 'devmuxel:win:attention',
 
-  clipboardWrite: 'grid:clipboard:write',
-  clipboardRead: 'grid:clipboard:read'
+  clipboardWrite: 'devmuxel:clipboard:write',
+  clipboardRead: 'devmuxel:clipboard:read'
 } as const
 
 /** main -> renderer, fire and forget */
 export const EV = {
-  ptyData: 'grid:ev:pty:data',
-  ptyExit: 'grid:ev:pty:exit',
-  gitState: 'grid:ev:git:state',
-  browserNet: 'grid:ev:browser:net',
-  browserCapture: 'grid:ev:browser:capture',
-  browserFocus: 'grid:ev:browser:focus',
+  ptyData: 'devmuxel:ev:pty:data',
+  ptyExit: 'devmuxel:ev:pty:exit',
+  gitState: 'devmuxel:ev:git:state',
+  browserNet: 'devmuxel:ev:browser:net',
+  browserCapture: 'devmuxel:ev:browser:capture',
+  browserFocus: 'devmuxel:ev:browser:focus',
   /** A session asked for the element picker on the last active browser pane. */
-  browserArmPicker: 'grid:ev:browser:armPicker',
+  browserArmPicker: 'devmuxel:ev:browser:armPicker',
   /** That batch has been read by a session; the pane may forget it. */
-  browserCommentsTaken: 'grid:ev:browser:commentsTaken',
+  browserCommentsTaken: 'devmuxel:ev:browser:commentsTaken',
   /** Whether a session is holding the line, so the pane can say so. */
-  browserWaiting: 'grid:ev:browser:waiting',
-  winMaximised: 'grid:ev:win:maximised',
-  winFocus: 'grid:ev:win:focus',
-  appBeforeQuit: 'grid:ev:app:beforeQuit',
-  menuAction: 'grid:ev:menu:action'
+  browserWaiting: 'devmuxel:ev:browser:waiting',
+  winMaximised: 'devmuxel:ev:win:maximised',
+  winFocus: 'devmuxel:ev:win:focus',
+  appBeforeQuit: 'devmuxel:ev:app:beforeQuit',
+  menuAction: 'devmuxel:ev:menu:action'
 } as const

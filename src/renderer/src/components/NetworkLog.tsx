@@ -59,7 +59,7 @@ export function NetworkLog({ paneId, log, onClose }: NetworkLogProps): React.JSX
         ...b,
         [entry.uid]: { loading: true, text: null, base64: false, error: null }
       }))
-      void window.grid.browser.body(paneId, entry.uid).then((result) => {
+      void window.devmuxel.browser.body(paneId, entry.uid).then((result) => {
         setBodies((b) => ({
           ...b,
           [entry.uid]: {
@@ -85,7 +85,7 @@ export function NetworkLog({ paneId, log, onClose }: NetworkLogProps): React.JSX
   }
 
   const clear = (): void => {
-    void window.grid.browser.clear(paneId)
+    void window.devmuxel.browser.clear(paneId)
     clearNet(paneId)
     setSelected(new Set())
     setExpanded(null)
@@ -150,7 +150,7 @@ export function NetworkLog({ paneId, log, onClose }: NetworkLogProps): React.JSX
             onClick={() => {
               const el = getView(paneId)
               if (!el) return
-              void window.grid.browser.attach(paneId, el.getWebContentsId()).then((r) => {
+              void window.devmuxel.browser.attach(paneId, el.getWebContentsId()).then((r) => {
                 if (!r.ok) actions.toast(r.error ?? 'Could not reattach', 'error')
               })
             }}

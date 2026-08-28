@@ -1,8 +1,8 @@
-import type { GridApi } from './index'
+import type { DevMuxelApi } from './index'
 
 declare global {
   interface Window {
-    grid: GridApi
+    devmuxel: DevMuxelApi
   }
 }
 

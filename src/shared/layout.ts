@@ -1,11 +1,11 @@
 /**
  * The split-tree layout engine.
  *
- * GRID's grid is a split tree (the same model tmux and VS Code's editor groups
- * use) rather than a fixed CSS grid, because the requirement is "as many panes
- * as I want, dragged into new sections". Every function here is pure: it takes
- * a tree and returns a new tree, so the renderer can keep the tree in React
- * state and snapshot it for undo.
+ * DevMuxel's grid is a split tree (the same model tmux and VS Code's editor
+ * groups use) rather than a fixed CSS grid, because the requirement is "as many
+ * panes as I want, dragged into new sections". Every function here is pure: it
+ * takes a tree and returns a new tree, so the renderer can keep the tree in
+ * React state and snapshot it for undo.
  *
  * Invariants of a *normalised* tree:
  *   - a split has >= 2 children

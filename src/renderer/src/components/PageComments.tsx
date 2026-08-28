@@ -5,7 +5,7 @@
  * up in the pane behind a badge rather than going anywhere, because the
  * session that will act on them does not exist yet — you write them while you
  * are looking at the page, and a Claude session comes and collects the lot
- * when you run /grid-browser in one and press send.
+ * when you run /devmuxel-browser in one and press send.
  *
  * That is the whole reason this is not the send dialog the network log uses:
  * there is nothing to decide at the moment of writing, so there is nothing to
@@ -174,18 +174,14 @@ export function CommentsPanel({
           Only on screen when there is something to do about it. Sending is
           half a handshake — the other half is a skill in the user's home
           directory, and until this build wrote it there is no way to tell
-          whether the copy they have still matches this GRID.
+          whether the copy they have still matches this DevMuxel.
         */}
         {skill.status && !skill.status.current && (
           <button
             className="netlog__skill"
             disabled={skill.busy}
             onClick={skill.install}
-            title={
-              skill.status.installed
-                ? `Your /grid-browser skill was not written by this GRID. Replaces ${skill.status.dir}.`
-                : `Write /grid-browser to ${skill.status.dir}, so a Claude session can come and collect these.`
-            }
+            title={skillTitle(skill.status)}
           >
             <IconPlus size={10} />{' '}
             {skill.busy
@@ -205,7 +201,7 @@ export function CommentsPanel({
           title={
             waiting
               ? 'A Claude session is waiting for these'
-              : 'Run /grid-browser in a Claude session first'
+              : 'Run /devmuxel-browser in a Claude session first'
           }
           data-armed={waiting}
         >
@@ -288,7 +284,22 @@ export function CommentsPanel({
 }
 
 /**
- * The `/grid-browser` skill, and the one button that installs it.
+ * What the install button says it will do, which depends on what is already
+ * there — including a `/grid-browser` left behind by the rename, since that is
+ * the one case where installing leaves the user with two slash commands and
+ * only one of them working.
+ */
+function skillTitle(status: SkillStatus): string {
+  const stale = status.legacyDir
+    ? ` The pre-rename /grid-browser at ${status.legacyDir} is not removed — delete it yourself.`
+    : ''
+  return status.installed
+    ? `Your /devmuxel-browser skill was not written by this DevMuxel. Replaces ${status.dir}.${stale}`
+    : `Write /devmuxel-browser to ${status.dir}, so a Claude session can come and collect these.${stale}`
+}
+
+/**
+ * The `/devmuxel-browser` skill, and the one button that installs it.
  *
  * Asked for when the comments open rather than at startup, because this is the
  * only place the answer is worth anything — and because "is there a file in
@@ -301,7 +312,7 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
 
   useEffect(() => {
     alive.current = true
-    void window.grid.skill.status().then((s) => {
+    void window.devmuxel.skill.status().then((s) => {
       if (alive.current) setStatus(s)
     })
     return () => {
@@ -311,16 +322,20 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
 
   const install = useCallback(() => {
     setBusy(true)
-    void window.grid.skill
+    void window.devmuxel.skill
       .install()
       .then(async (result) => {
         if (!result.ok) {
           actions.toast(`Could not write the skill — ${result.error}`, 'error')
           return
         }
-        const next = await window.grid.skill.status()
+        const next = await window.devmuxel.skill.status()
         if (alive.current) setStatus(next)
-        actions.toast('Skill installed — run /grid-browser in a Claude session')
+        actions.toast(
+          next.legacyDir
+            ? `Skill installed — run /devmuxel-browser. The old /grid-browser is still at ${next.legacyDir}; delete it when you like.`
+            : 'Skill installed — run /devmuxel-browser in a Claude session'
+        )
       })
       .finally(() => {
         if (alive.current) setBusy(false)
@@ -352,13 +367,13 @@ export function sendComments(
     comments.map((c) => c.id)
   )
 
-  void window.grid.browser.sendComments({ batch, pane: label, url, comments }).then(({ taken }) => {
+  void window.devmuxel.browser.sendComments({ batch, pane: label, url, comments }).then(({ taken }) => {
     if (taken) {
       actions.toast(`Sent ${comments.length} comment${comments.length === 1 ? '' : 's'}`)
       return
     }
     actions.toast(
-      'No Claude session is waiting — run /grid-browser in one, then send again',
+      'No Claude session is waiting — run /devmuxel-browser in one, then send again',
       'error'
     )
   })

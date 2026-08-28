@@ -39,9 +39,9 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
     const buildNumber = getState().buildNumber
 
     const callbacks: SessionCallbacks = {
-      onInput: (data) => window.grid.pty.write(pane.id, data),
-      onResize: (cols, rows) => window.grid.pty.resize(pane.id, cols, rows),
-      onAck: (bytes) => window.grid.pty.ack(pane.id, bytes),
+      onInput: (data) => window.devmuxel.pty.write(pane.id, data),
+      onResize: (cols, rows) => window.devmuxel.pty.resize(pane.id, cols, rows),
+      onAck: (bytes) => window.devmuxel.pty.ack(pane.id, bytes),
       onTitle: (title) => actions.patchRuntime(pane.id, { title }),
       onAttention: (signal) => {
         if (signal === 'busy') {
@@ -59,7 +59,7 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
         actions.raiseAttention(pane.id, signal === 'bell' ? 'bell' : 'idle')
       },
       onShellBack: () => {
-        // Whatever GRID started in here has exited and the shell has the
+        // Whatever DevMuxel started in here has exited and the shell has the
         // terminal back. Forgetting the command is what stops a captured
         // request being pasted into a bare prompt on the strength of a CLI
         // that is no longer running.
@@ -82,7 +82,7 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
 
     let cancelled = false
     if (!existing) {
-      void window.grid.pty
+      void window.devmuxel.pty
         .spawn({
           paneId: pane.id,
           cwd: pane.cwd,
@@ -105,26 +105,27 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
           })
 
           // A pane restored from the last session only re-runs its command if
-          // the user opted in; a pane just opened always does. A command GRID
-          // chose for one specific terminal — a Claude session opened on a
-          // captured request, say — is never replayed: it points at a capture
-          // file that may be long gone, and "restored terminals re-run their
-          // repository command" promises the repository's command, not that.
+          // the user opted in; a pane just opened always does. A command
+          // DevMuxel chose for one specific terminal — a Claude session opened
+          // on a captured request, say — is never replayed: it points at a
+          // capture file that may be long gone, and "restored terminals re-run
+          // their repository command" promises the repository's command, not
+          // that.
           const restored = getState().restoredPaneIds.has(pane.id)
           const oneShot = pane.runStartup !== undefined
           const allowed = !restored || (getState().settings.restoreRunsStartup && !oneShot)
           const command = allowed ? (pane.startupCommand ?? repo?.startupCommand) : null
           if (command) {
-            // `runStartup` is set only when GRID picked the command itself, so
-            // it is the flag that distinguishes the two cases; a repository's
-            // own command still answers to the repository's "press Enter for
-            // me".
+            // `runStartup` is set only when DevMuxel picked the command itself,
+            // so it is the flag that distinguishes the two cases; a
+            // repository's own command still answers to the repository's "press
+            // Enter for me".
             const run = pane.runStartup ?? repo?.runOnOpen ?? false
             // Give the shell a moment to print its own prompt first, otherwise
             // the command lands in the middle of the banner.
             window.setTimeout(() => {
               if (cancelled) return
-              window.grid.pty.write(pane.id, run ? `${command}\r` : command)
+              window.devmuxel.pty.write(pane.id, run ? `${command}\r` : command)
               // Recorded only when Enter was actually pressed. Anything that
               // asks "is a CLI running in this pane" has to key off what ran,
               // not off what the repository is configured with — the command
@@ -152,7 +153,7 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
       if (paneById(s, pane.id)) return
 
       cancelled = true
-      window.grid.pty.kill(pane.id)
+      window.devmuxel.pty.kill(pane.id)
       destroySession(pane.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,7 +190,7 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
   const onMouseUp = useCallback(() => {
     if (!app.settings.copyOnSelect) return
     const session = getSession(pane.id)
-    if (session?.hasSelection()) void window.grid.clipboard.write(session.selection())
+    if (session?.hasSelection()) void window.devmuxel.clipboard.write(session.selection())
   }, [app.settings.copyOnSelect, pane.id])
 
   const onContextMenu = useCallback(
@@ -201,10 +202,10 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
       // Right click copies a selection if there is one, otherwise pastes —
       // the PuTTY convention, and the one most terminal users expect.
       if (session.hasSelection()) {
-        void window.grid.clipboard.write(session.selection())
+        void window.devmuxel.clipboard.write(session.selection())
         session.term.clearSelection()
       } else {
-        void window.grid.clipboard.read().then((text) => {
+        void window.devmuxel.clipboard.read().then((text) => {
           if (text) session.paste(text)
         })
       }
@@ -345,12 +346,12 @@ function handleTerminalShortcut(
     switch (e.key.toLowerCase()) {
       case 'c':
         if (session.hasSelection()) {
-          void window.grid.clipboard.write(session.selection())
+          void window.devmuxel.clipboard.write(session.selection())
           return true
         }
         return false
       case 'v':
-        void window.grid.clipboard.read().then((text) => {
+        void window.devmuxel.clipboard.read().then((text) => {
           if (text) session.paste(text)
         })
         return true

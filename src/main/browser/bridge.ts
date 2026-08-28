@@ -1,11 +1,11 @@
 /**
  * The door a Claude session knocks on.
  *
- * `/grid-browser` runs a script in whatever session you happen to be in, and
- * that script has to reach the GRID that is already running — arm the element
- * picker in it, then wait for you to finish marking the page up and press
- * send. A running Electron app cannot be driven by pointing at its executable,
- * so it listens instead.
+ * `/devmuxel-browser` runs a script in whatever session you happen to be in,
+ * and that script has to reach the DevMuxel that is already running — arm the
+ * element picker in it, then wait for you to finish marking the page up and
+ * press send. A running Electron app cannot be driven by pointing at its
+ * executable, so it listens instead.
  *
  * Loopback only, on a port the OS picks, behind a token generated fresh each
  * launch. Both go in `bridge.json` next to the state file, which is how the
@@ -139,10 +139,10 @@ export class BrowserBridge {
     try {
       if (req.method === 'POST' && url.pathname === '/v1/select') {
         if (!this.deps.hasBrowserPane()) {
-          return send(res, 409, { error: 'no browser pane is open in GRID' })
+          return send(res, 409, { error: 'no browser pane is open in DevMuxel' })
         }
         const armed = await this.deps.armPicker()
-        return send(res, armed ? 200 : 409, armed ? { ok: true } : { error: 'no browser pane is open in GRID' })
+        return send(res, armed ? 200 : 409, armed ? { ok: true } : { error: 'no browser pane is open in DevMuxel' })
       }
 
       if (req.method === 'GET' && url.pathname === '/v1/comments') {

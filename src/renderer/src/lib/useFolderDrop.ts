@@ -32,10 +32,10 @@ export function useFolderDrop(): void {
         let firstId: string | null = null
 
         for (const file of Array.from(files)) {
-          const target = window.grid.pathForFile(file)
+          const target = window.devmuxel.pathForFile(file)
           if (!target) continue
 
-          const probe = await window.grid.repo.probe(target)
+          const probe = await window.devmuxel.repo.probe(target)
 
           // A dropped file inside a repo means the repo. A dropped file that is
           // not in one has no folder to open, and adding it would leave a repo
