@@ -11,8 +11,9 @@
  * is never drawn (the window is frameless), it exists purely to own the
  * bindings — which is also how VS Code and Hyper do this.
  *
- * Everything here is Ctrl+Alt, or Ctrl plus a zoom key. Nothing shadows a
- * plain Ctrl chord, because Claude and every other CLI need those.
+ * Everything here is Ctrl+Alt, Ctrl+Alt+Shift, or Ctrl plus a zoom or page
+ * key. Nothing shadows a plain Ctrl letter, because Claude and every other CLI
+ * need those.
  */
 
 import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from 'electron'
@@ -22,6 +23,10 @@ export type MenuAction =
   | 'new-terminal'
   | 'new-note'
   | 'new-browser'
+  | 'new-tab'
+  | 'close-tab'
+  | 'next-tab'
+  | 'prev-tab'
   | 'split-right'
   | 'split-down'
   | 'close-pane'
@@ -80,6 +85,20 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
       ]
     },
     {
+      label: '&Tab',
+      submenu: [
+        // Ctrl+Alt+T opens a terminal; the same chord with Shift opens a whole
+        // new grid to put terminals in. Same for Ctrl+Alt+W and its grid.
+        item('New grid', 'Ctrl+Alt+Shift+T', 'new-tab'),
+        item('Close grid', 'Ctrl+Alt+Shift+W', 'close-tab'),
+        { type: 'separator' },
+        // The chord every browser and terminal emulator already uses for this,
+        // and one no CLI binds.
+        item('Next grid', 'Ctrl+PageDown', 'next-tab'),
+        item('Previous grid', 'Ctrl+PageUp', 'prev-tab')
+      ]
+    },
+    {
       label: '&Pane',
       submenu: [
         item('Split right', 'Ctrl+Alt+D', 'split-right'),
@@ -91,8 +110,9 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
         { type: 'separator' },
         item('Close pane', 'Ctrl+Alt+W', 'close-pane'),
         // The browser gesture, and the same promise: for five seconds after a
-        // close, the shell is still running and this puts it back.
-        item('Reopen closed pane', 'Ctrl+Shift+T', 'reopen-pane')
+        // close, whatever it was is still running and this puts it back — a
+        // pane, or a whole grid.
+        item('Reopen what you closed', 'Ctrl+Shift+T', 'reopen-pane')
       ]
     },
     {

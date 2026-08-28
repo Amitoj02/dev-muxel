@@ -1,20 +1,22 @@
 /**
  * The reopen window.
  *
- * Closing a pane does not destroy it straight away: for REOPEN_WINDOW_MS the
- * shell keeps running and the scrollback stays in memory, so Ctrl+Shift+T can
- * bring the whole thing back as it was rather than open a lookalike. The store
- * side of that lives in `actions.closePane` / `actions.reopenLast`.
+ * Closing a pane — or a whole grid — does not destroy it straight away. For
+ * REOPEN_WINDOW_MS everything it held stays exactly where it was: the panes
+ * stay in the store, and so stay mounted and hidden, which means shells keep
+ * running, xterm keeps its scrollback, and a browser pane keeps its page, its
+ * network log and any comments written on it. Ctrl+Shift+T is then a real undo
+ * rather than a fresh pane that happens to look the same. The store side of
+ * that is `actions.closePane` / `actions.closeTab` / `actions.reopenLast`.
  *
- * Something still has to hold the axe. This hook is it: it watches the stack of
- * recently closed panes and, when the oldest runs out of time, kills the pty,
- * disposes the terminal and drops the entry. Keeping it here rather than in the
- * store is what lets the store stay clear of pty and xterm plumbing.
+ * Something still has to call time. This hook is it: it watches the stack and,
+ * when the oldest entry runs out, tells the store to let go. The killing
+ * itself happens where it always does — in each pane component's own cleanup,
+ * which runs the moment the store drops the pane out of the list.
  */
 
 import { useEffect } from 'react'
-import { actions, getState, useSlice } from '../state/hooks'
-import { destroySession } from '../terminal/session'
+import { actions, useSlice } from '../state/hooks'
 
 export function useRecentlyClosed(): void {
   const closed = useSlice((s) => s.recentlyClosed)
@@ -24,21 +26,10 @@ export function useRecentlyClosed(): void {
     const due = Math.min(...closed.map((e) => e.expiresAt))
     // A few ms of slack, so the timer can never land a hair early and find
     // nothing expired to reap.
-    const id = window.setTimeout(reap, Math.max(0, due - Date.now()) + 20)
+    const id = window.setTimeout(
+      () => actions.dropExpired(),
+      Math.max(0, due - Date.now()) + 20
+    )
     return () => window.clearTimeout(id)
   }, [closed])
-}
-
-function reap(): void {
-  const now = Date.now()
-  const expired = getState().recentlyClosed.filter((e) => e.expiresAt <= now)
-  if (expired.length === 0) return
-
-  for (const entry of expired) {
-    // Parked panes are the only ones still holding on to anything; everything
-    // else was torn down when its component unmounted.
-    if (entry.parked) window.grid.pty.kill(entry.pane.id)
-    destroySession(entry.pane.id)
-  }
-  actions.dropClosed(expired.map((e) => e.pane.id))
 }

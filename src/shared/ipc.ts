@@ -45,6 +45,9 @@ export const CH = {
   /** A pane's send button, handing its comments to a waiting session. */
   browserSendComments: 'grid:browser:sendComments',
 
+  /** Is the /grid-browser skill installed for this user, and is it current? */
+  skillStatus: 'grid:skill:status',
+  skillInstall: 'grid:skill:install',
 
   winMinimise: 'grid:win:minimise',
   winToggleMaximise: 'grid:win:toggleMaximise',

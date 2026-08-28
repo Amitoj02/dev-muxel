@@ -62,13 +62,29 @@ const CTRL_SHIFT_KEYS = new Set([
   't' // reopen the pane just closed
 ])
 
-/** Plain Ctrl chords. Only the universal zoom keys, which no CLI binds. */
-const CTRL_KEYS = new Set(['=', '+', '-', '_', '0'])
+/**
+ * Ctrl+Alt+Shift chords, which are the tab ones: Ctrl+Alt+T opens a terminal,
+ * and the same chord with Shift opens a whole grid to put terminals in.
+ */
+const CTRL_ALT_SHIFT_KEYS = new Set([
+  't', // new tab
+  'w' // close tab
+])
 
-export type ChordKind = 'ctrl-alt' | 'ctrl-shift' | 'ctrl' | null
+/**
+ * Plain Ctrl chords. The universal zoom keys, which no CLI binds, and the page
+ * keys, which every browser and terminal emulator already uses for switching
+ * tabs. Claiming those costs a pager its Ctrl+PageUp, and is worth it.
+ */
+const CTRL_KEYS = new Set(['=', '+', '-', '_', '0', 'pageup', 'pagedown'])
+
+export type ChordKind = 'ctrl-alt' | 'ctrl-alt-shift' | 'ctrl-shift' | 'ctrl' | null
 
 export function classifyChord(e: KeyboardEvent): ChordKind {
   const key = e.key.toLowerCase()
+  if (e.ctrlKey && e.altKey && e.shiftKey) {
+    return CTRL_ALT_SHIFT_KEYS.has(key) ? 'ctrl-alt-shift' : null
+  }
   if (e.ctrlKey && e.altKey && !e.shiftKey) {
     return CTRL_ALT_KEYS.has(key) ? 'ctrl-alt' : null
   }

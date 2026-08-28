@@ -170,6 +170,158 @@ body {
 }
 
 /* ==========================================================================
+   Tab strip
+   ========================================================================== */
+
+/*
+ * One row, one grid.
+ *
+ * On screen even with a single tab: it is where the `+` lives, it is the only
+ * drop target for moving a pane from one grid to another, and a strip that
+ * only appears once you already have two tabs is a strip nobody finds.
+ */
+.tabstrip {
+  height: var(--tabstrip-h);
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-chassis);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tabstrip__tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 220px;
+  border-right: 1px solid var(--line);
+  background: var(--bg-sunken);
+  transition: background var(--dur-tint) ease;
+}
+
+.tabstrip__tab:hover {
+  background: var(--bg-header);
+}
+
+/* The grid you are in is the one that is *not* sunken — it is level with the
+   surface below it, and wears the signal colour along its top edge. */
+.tabstrip__tab[data-active='true'] {
+  background: var(--bg-chassis);
+  box-shadow: inset 0 2px 0 var(--red);
+}
+
+/* The tab being dragged along the strip, under the pointer. */
+.tabstrip__tab[data-moving='true'] {
+  opacity: 0.55;
+}
+
+/* Where a dragged pane would land. */
+.tabstrip__tab[data-dropping='true'] {
+  background: var(--red-wash);
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+
+.tabstrip__open {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0 7px 0 12px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--ink-muted);
+  font: 500 11.5px / 1 var(--font-ui);
+}
+
+.tabstrip__tab[data-active='true'] .tabstrip__open {
+  color: var(--ink);
+}
+
+.tabstrip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tabstrip__count {
+  font: 500 9.5px / 1 var(--font-mono);
+  color: var(--ink-faint);
+  flex: none;
+}
+
+/* Something in this grid wants you, and you are looking at another one. */
+.tabstrip__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--red);
+  animation: grid-blink 1.4s steps(1) infinite;
+}
+
+.tabstrip__close {
+  width: 22px;
+  align-self: stretch;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding-right: 6px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--ink-ghost);
+  transition: color var(--dur-tint) ease;
+}
+
+.tabstrip__close:hover {
+  color: var(--red-light);
+}
+
+.tabstrip__rename {
+  width: 150px;
+  margin: 0 8px;
+  font: 500 11.5px / 1 var(--font-ui);
+  color: var(--ink);
+  background: var(--bg-term);
+  border: 1px solid var(--line-focus);
+  padding: 4px 6px;
+  outline: none;
+  user-select: text;
+}
+
+.tabstrip__add {
+  width: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+  color: var(--ink-dim);
+  transition: color var(--dur-tint) ease, background var(--dur-tint) ease;
+}
+
+.tabstrip__add:hover {
+  color: var(--ink);
+  background: var(--bg-header);
+}
+
+/* Whatever is left of the row is somewhere to pick the window up by. */
+.tabstrip__drag {
+  flex: 1;
+  min-width: 0;
+  -webkit-app-region: drag;
+}
+
+/* ==========================================================================
    Grid surface
    ========================================================================== */
 
@@ -252,6 +404,26 @@ body {
 
 .pane[data-dragging='true'] {
   opacity: 0.4;
+}
+
+/*
+ * A pane belonging to a tab that is not on screen.
+ *
+ * Hidden rather than unmounted, which is the whole point of tabs here: the
+ * shell keeps running, xterm keeps its scrollback and a browser pane keeps its
+ * page. `visibility` rather than `display: none` deliberately — the latter
+ * takes the element's layout box away, and a <webview> whose box goes away
+ * loses its guest and reloads when it comes back.
+ *
+ * It keeps the rect its own grid gives it, so nothing is resized on the way
+ * out or back in and a tab switch never reflows a pty.
+ */
+.pane[data-hidden='true'] {
+  visibility: hidden;
+  pointer-events: none;
+  /* Nothing to animate where nobody can see it. */
+  transition: none;
+  animation: none;
 }
 
 .pane--note {
@@ -762,6 +934,99 @@ body {
 .btn[disabled]:hover {
   background: var(--bg-chip);
   border-color: var(--line);
+}
+
+/* ==========================================================================
+   Anchored menus
+   ========================================================================== */
+
+/*
+ * Fixed, because the titlebar is a 38px strip that clips anything inside it.
+ * Below the overlay's z-index on purpose: a dialog is modal and a menu is not,
+ * so a menu must never end up on top of one.
+ */
+.pmenu {
+  position: fixed;
+  z-index: 90;
+  min-width: 250px;
+  max-width: 460px;
+  max-height: 62vh;
+  overflow: auto;
+  background: var(--bg-pane);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-dialog);
+  padding: 4px 0;
+  animation: grid-fade 100ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.pmenu__label {
+  display: block;
+  font: 700 9px / 1 var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  padding: 9px 12px 7px;
+}
+
+.pmenu__empty {
+  margin: 0;
+  padding: 0 12px 8px;
+  font: 400 11px / 1.6 var(--font-mono);
+  color: var(--ink-faint);
+  max-width: 34ch;
+}
+
+.pmenu__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 7px 12px;
+  cursor: pointer;
+  color: var(--ink-2);
+  font: 500 11.5px / 1.3 var(--font-ui);
+  transition: background var(--dur-tint) ease, color var(--dur-tint) ease;
+}
+
+.pmenu__item:hover {
+  background: var(--bg-hover);
+  color: var(--ink);
+}
+
+.pmenu__dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--line-strong);
+}
+
+.pmenu__name {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* The path is the disambiguator, so it is allowed to be the thing that
+   truncates — two repositories can share a name, never a folder. */
+.pmenu__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
+  font: 400 10px / 1 var(--font-mono);
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+}
+
+.pmenu__sep {
+  height: 1px;
+  background: var(--line);
+  margin: 4px 0;
 }
 
 /* ==========================================================================
@@ -1319,10 +1584,15 @@ body {
   color: var(--ink-ghost);
 }
 
-/* A page still arriving gets a hairline sweep rather than a spinner. */
+/*
+ * A page still arriving gets a hairline sweep rather than a spinner, run along
+ * the bottom edge where it cannot sit behind the URL you are reading. The bar
+ * itself never moves: see the note on `grid-sweep`.
+ */
 .browser-url[data-loading='true'] {
-  background-image: linear-gradient(90deg, transparent, var(--blue-wash), transparent);
-  background-size: 40% 100%;
+  background-image: linear-gradient(90deg, transparent, var(--blue-light), transparent);
+  background-size: 40% 2px;
+  background-position: -70% 100%;
   background-repeat: no-repeat;
   animation: grid-sweep 1.1s linear infinite;
 }
@@ -1717,6 +1987,79 @@ body {
   color: var(--red-light);
   border-color: var(--red);
   background: var(--red-wash);
+}
+
+/*
+ * Picking an element is what the comments panel is for, so it gets the one
+ * filled button in a bar of hairline outlines — as an outline it read as just
+ * another toggle and was being missed. Blue while it is off: the browser
+ * pane's own accent, and an invitation. Red while it is on, because every
+ * other live state in GRID is red.
+ *
+ * Not `netlog__pick`: that name was already the network log's row checkbox,
+ * eleven pixels square with `display: grid`, and being defined further down
+ * the file it won. The button came out as an empty 22x13 box with its icon
+ * and its label spilled out beside it.
+ */
+.netlog__select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 10.5px / 1 var(--font-ui);
+  color: #fff;
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  padding: 6px 10px;
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+  transition: background var(--dur-tint) ease, border-color var(--dur-tint) ease;
+}
+
+/* The icon is a flex item like the label, and must not be squeezed out of it. */
+.netlog__select svg {
+  flex: none;
+}
+
+.netlog__select:hover {
+  background: var(--blue-light);
+  border-color: var(--blue-light);
+}
+
+.netlog__select[data-on='true'] {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+/*
+ * Only ever on screen when the skill is missing or was not written by this
+ * build, so it can afford to be loud — until it is pressed, Send has nobody to
+ * send to. Amber rather than red: nothing is broken yet.
+ */
+.netlog__skill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 10px / 1 var(--font-ui);
+  color: var(--amber);
+  background: none;
+  border: 1px dashed var(--amber);
+  padding: 6px 8px;
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+  transition: background var(--dur-tint) ease, color var(--dur-tint) ease;
+}
+
+.netlog__skill:hover:not([disabled]) {
+  color: var(--bg-chassis);
+  background: var(--amber);
+  border-style: solid;
+}
+
+.netlog__skill[disabled] {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .netlog__count {

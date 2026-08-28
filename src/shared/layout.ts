@@ -414,6 +414,37 @@ export function normalise(node: LayoutNode | null): LayoutNode | null {
   return { ...node, children, sizes: normaliseSizes(sizes) }
 }
 
+/**
+ * Repair a set of trees against the panes that actually exist.
+ *
+ * Once there are tabs there is more than one tree, and a pane belongs to
+ * exactly one of them. Nothing in the state file enforces that: a hand-edited
+ * or half-written one can name the same pane in two trees, or name one the
+ * pane list lost. Either is fatal on screen — a pane rendered twice is two
+ * components fighting over one pty, and a leaf with nothing behind it is a
+ * hole in the grid.
+ *
+ * First tree to name a pane keeps it; everything else naming it, and
+ * everything naming a pane that is not there, is dropped. The trees come back
+ * normalised, so a tree left with one child collapses rather than staying a
+ * split of one.
+ */
+export function claimLeaves(
+  trees: Array<LayoutNode | null>,
+  exists: (paneId: string) => boolean
+): Array<LayoutNode | null> {
+  const claimed = new Set<string>()
+
+  return trees.map((tree) => {
+    let out = normalise(tree)
+    for (const paneId of collectPaneIds(out)) {
+      if (!claimed.has(paneId) && exists(paneId)) claimed.add(paneId)
+      else out = removePane(out, paneId)
+    }
+    return out
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Auto-placement
 // ---------------------------------------------------------------------------

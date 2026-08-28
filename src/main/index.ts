@@ -17,6 +17,7 @@ import type { CommentBatch } from '../shared/browser'
 import { formatComments } from '../shared/claude'
 import { CaptureStash } from './browser/stash'
 import { hardenGuest, prepareGuestSession } from './browser/guest'
+import { installSkill, skillStatus } from './browser/skill'
 import { buildMenu } from './menu'
 import { GitWatcher } from './git/watcher'
 import { probeRepo, scanForRepos } from './git/status'
@@ -248,6 +249,14 @@ function registerIpc(): void {
     // control characters out of it before it reaches a session's context.
     taken: bridge.deliver({ ...batch, text: formatComments(batch) })
   }))
+
+  // --- the /grid-browser skill -------------------------------------------
+  // The other half of the bridge above, shipped with the app so the two cannot
+  // drift apart. Installing it is always something the user pressed a button
+  // for; nothing here writes to their home directory on its own.
+
+  ipcMain.handle(CH.skillStatus, () => skillStatus())
+  ipcMain.handle(CH.skillInstall, () => installSkill())
 
   // --- window ------------------------------------------------------------
 

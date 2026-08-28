@@ -9,7 +9,7 @@
 
 import { memo, useCallback } from 'react'
 import type { Pane } from '../../../shared/types'
-import type { Rect } from '../../../shared/layout'
+import { collectPaneIds, type Rect } from '../../../shared/layout'
 import { accentOf } from '../lib/colour'
 import {
   actions,
@@ -31,6 +31,8 @@ export type PaneShellProps = {
   pane: Pane
   rect: Rect
   zoomed: boolean
+  /** This pane belongs to a tab that is not on screen. */
+  hidden: boolean
   animating: boolean
   onDragStart: (paneId: string, e: React.PointerEvent) => void
 }
@@ -39,6 +41,7 @@ export const PaneShell = memo(function PaneShell({
   pane,
   rect,
   zoomed,
+  hidden,
   animating,
   onDragStart
 }: PaneShellProps): React.JSX.Element {
@@ -52,8 +55,9 @@ export const PaneShell = memo(function PaneShell({
   const note = pane.kind === 'note' ? noteById(app, pane.noteId) : null
   const accent = accentOf(repo?.color)
 
-  // Keep the note header's relative timestamp honest.
-  useTick(10_000, pane.kind === 'note')
+  // Keep the note header's relative timestamp honest. Nothing to keep honest
+  // about a header nobody can see.
+  useTick(10_000, pane.kind === 'note' && !hidden)
 
   const focus = useCallback(() => actions.focusPane(pane.id), [pane.id])
 
@@ -76,19 +80,26 @@ export const PaneShell = memo(function PaneShell({
    */
   const sendToTerminal = useCallback(
     (text: string): boolean => {
+      // Only terminals in this grid. Sending into a tab you are not looking at
+      // would jump you there mid-sentence, and the note you are writing is
+      // about the work in front of you.
+      const here = new Set(collectPaneIds(app.layout))
+      const usable = app.panes.filter((p) => here.has(p.id))
       // The terminal you were last *in*, not the one most recently opened —
       // you click the note, type, and send it back where you came from.
       const preferred = app.lastTerminalPaneId
       const target =
-        (preferred && getSession(preferred) ? app.panes.find((p) => p.id === preferred) : null) ??
-        [...app.panes].reverse().find((p) => p.kind === 'terminal' && getSession(p.id))
+        (preferred && here.has(preferred) && getSession(preferred)
+          ? usable.find((p) => p.id === preferred)
+          : null) ??
+        [...usable].reverse().find((p) => p.kind === 'terminal' && getSession(p.id))
       if (!target) return false
       window.grid.pty.write(target.id, text)
       actions.focusPane(target.id)
       getSession(target.id)?.focus()
       return true
     },
-    [app.panes, app.lastTerminalPaneId]
+    [app.layout, app.panes, app.lastTerminalPaneId]
   )
 
   return (
@@ -97,6 +108,8 @@ export const PaneShell = memo(function PaneShell({
       style={paneStyle(rect, accent)}
       data-focused={focused}
       data-accent={accent ? 'true' : undefined}
+      data-hidden={hidden}
+      aria-hidden={hidden || undefined}
       data-zoomed={zoomed}
       data-animating={animating}
       data-attention={runtime.attention}

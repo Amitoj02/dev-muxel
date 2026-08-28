@@ -10,7 +10,7 @@ export function ShortcutsSheet(): React.JSX.Element {
       <div className="dialog dialog--narrow">
         <div className="dialog__head">
           <h2 className="dialog__title">KEYBOARD</h2>
-          <span className="dialog__sub">Ctrl+Alt and Ctrl+Shift only</span>
+          <span className="dialog__sub">Ctrl+Alt, Ctrl+Shift, and four keys no CLI binds</span>
           <button className="dialog__close" onClick={() => actions.closeOverlay()} aria-label="Close">
             <IconClose size={12} />
           </button>
@@ -26,8 +26,9 @@ export function ShortcutsSheet(): React.JSX.Element {
               maxWidth: '52ch'
             }}
           >
-            Nothing here uses a plain Ctrl key, so Claude and every other CLI keep the whole
-            keyboard to themselves.
+            Everything is Ctrl+Alt or Ctrl+Shift, so Claude and every other CLI keep the plain
+            Ctrl range to themselves. The only exceptions are the zoom and page keys, which no
+            CLI binds and every other application uses for exactly this.
           </p>
 
           <div className="keys">

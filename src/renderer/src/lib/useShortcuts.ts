@@ -15,20 +15,22 @@
 import { useEffect } from 'react'
 import { measure, neighbour } from '../../../shared/layout'
 import { classifyChord } from './chords'
-import { actions, getState } from '../state/hooks'
-import { getView } from '../browser/netlog'
-import { getSession } from '../terminal/session'
+import { focusPaneHard } from './focus'
+import { actions, getState, tabRunning } from '../state/hooks'
 
 export type Shortcut = { keys: string; what: string }
 
 export const SHORTCUTS: Shortcut[] = [
   { keys: 'Ctrl+Alt+T', what: 'New terminal' },
+  { keys: 'Ctrl+Alt+Shift+T', what: 'New grid, in its own tab' },
+  { keys: 'Ctrl+Alt+Shift+W', what: 'Close this grid and everything in it' },
+  { keys: 'Ctrl+PageUp / PageDown', what: 'Previous / next grid' },
   { keys: 'Ctrl+Alt+G', what: 'New browser pane' },
   { keys: 'Ctrl+Alt+N', what: 'New note' },
   { keys: 'Ctrl+Alt+D', what: 'Split the focused pane to the right' },
   { keys: 'Ctrl+Alt+S', what: 'Split the focused pane downwards' },
   { keys: 'Ctrl+Alt+W', what: 'Close the focused pane' },
-  { keys: 'Ctrl+Shift+T', what: 'Bring back the pane you just closed, for 5 seconds' },
+  { keys: 'Ctrl+Shift+T', what: 'Bring back the pane or grid you just closed, for 5 seconds' },
   { keys: 'Ctrl+Alt+Z', what: 'Fill the window, and back again' },
   { keys: 'Ctrl+Alt+←↑→↓', what: 'Move focus to the next pane that way' },
   { keys: 'Ctrl+Alt+1…9', what: 'Focus pane 1 to 9' },
@@ -59,6 +61,29 @@ export function runAction(action: string): void {
       return
     case 'new-browser':
       return actions.addBrowserSmart()
+    case 'new-tab':
+      actions.addTab()
+      return
+    case 'close-tab': {
+      const tabId = state.activeTabId
+      // Checked before the dialog, not after it: there is no app without a
+      // grid, and asking "really close it?" only to refuse is worse than
+      // saying so up front.
+      if (state.tabs.length < 2) {
+        actions.toast('That is the only grid open')
+        return
+      }
+      if (state.settings.confirmClose && tabRunning(state, tabId) > 0) {
+        actions.showOverlay({ kind: 'confirm-close-tab', tabId })
+        return
+      }
+      actions.closeTab(tabId)
+      return
+    }
+    case 'next-tab':
+      return actions.cycleTab(1)
+    case 'prev-tab':
+      return actions.cycleTab(-1)
     case 'split-right':
       if (focused) actions.splitFrom(focused, 'right')
       return
@@ -119,24 +144,15 @@ export function runAction(action: string): void {
         return Math.abs(dy) > 8 ? dy : a[1].x - b[1].x
       })
       const target = ordered[Number(what) - 1]
-      if (target) focusPane(target[0])
+      if (target) focusPaneHard(target[0])
       return
     }
 
     if (!focused) return
     const dir = what as 'left' | 'right' | 'up' | 'down'
     const next = neighbour(panes, focused, dir)
-    if (next) focusPane(next)
+    if (next) focusPaneHard(next)
   }
-}
-
-function focusPane(paneId: string): void {
-  actions.focusPane(paneId)
-  // Marking a pane focused in the store is not the same as the keyboard going
-  // there: a terminal's keys live in xterm's textarea and a browser pane's in
-  // another process entirely, so whichever this pane is, it is told directly.
-  getSession(paneId)?.focus()
-  getView(paneId)?.focus()
 }
 
 function clampFont(size: number): number {
@@ -146,6 +162,12 @@ function clampFont(size: number): number {
 /** DOM chord -> action name, for the fallback listener. */
 function actionForChord(e: KeyboardEvent): string | null {
   const key = e.key.toLowerCase()
+
+  if (e.ctrlKey && e.altKey && e.shiftKey) {
+    if (key === 't') return 'new-tab'
+    if (key === 'w') return 'close-tab'
+    return null
+  }
 
   if (e.ctrlKey && e.altKey) {
     switch (key) {
@@ -199,6 +221,8 @@ function actionForChord(e: KeyboardEvent): string | null {
     if (key === '=' || key === '+') return 'font-bigger'
     if (key === '-' || key === '_') return 'font-smaller'
     if (key === '0') return 'font-reset'
+    if (key === 'pagedown') return 'next-tab'
+    if (key === 'pageup') return 'prev-tab'
   }
 
   return null

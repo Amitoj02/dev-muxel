@@ -8,6 +8,15 @@
  * The renderer owns layout / panes / repos / notes / settings and pushes the
  * whole lot at the main process to be written to disk, debounced. The main
  * process owns ptys, git and the filesystem. Nothing crosses that line.
+ *
+ * One shape here is worth reading before anything else. `panes` is every pane
+ * in the app, across every tab; a tab is only a layout tree naming some of
+ * them. The tab you are looking at keeps its grid in the *top-level*
+ * `layout` / `focusedPaneId` / `zoomedPaneId`, and its entry in `tabs` is
+ * stale until `tabsSnapshot` reconciles the two. That looks like duplication
+ * and is the opposite: it means every reader of `state.layout` is reading the
+ * grid on screen without knowing tabs exist, and there is exactly one place —
+ * this file — that has to.
  */
 
 import type {
@@ -21,18 +30,19 @@ import type {
   Repo,
   Settings,
   ShellProfile,
+  TabState,
   TerminalPane
 } from '../../../shared/types'
 import { hostLabel, normaliseUrl } from '../../../shared/browser'
 import {
   anchorFor,
   autoAppend,
+  claimLeaves,
   collectPaneIds,
   evenOut,
   findLeaf,
   measure,
   movePane,
-  normalise,
   removePane,
   resizeSplit,
   splitPane,
@@ -78,17 +88,52 @@ export type PaneRuntime = {
   ranStartup: string | null
 }
 
-/** A pane closed recently enough to be worth keeping around. */
-export type ClosedPane = {
+/**
+ * One grid, as the renderer holds it.
+ *
+ * `zoomedPaneId` is here as well as on the persisted shape because a zoom
+ * should survive a trip to another tab and back, and should not survive a
+ * restart — so it is remembered, and dropped on the way to disk.
+ */
+export type Tab = TabState & { zoomedPaneId: string | null }
+
+/**
+ * Something closed recently enough to be worth holding on to — a pane, or a
+ * whole grid of them.
+ *
+ * `parked` means nothing behind it has actually been torn down. A parked pane
+ * stays in `panes` and stays *mounted*, hidden exactly like a pane in a tab
+ * you are not looking at, which is what makes the reopen the same thing rather
+ * than a lookalike: the shell is still running, xterm still has its
+ * scrollback, and a browser pane still has its page, its network log and its
+ * comments. See `GridView`, which draws them.
+ */
+export type ClosedEntry = ClosedPaneEntry | ClosedTabEntry
+
+export type ClosedPaneEntry = {
+  kind: 'pane'
   pane: Pane
+  /** Tab it was closed out of, so it goes back where it came from. */
+  tabId: string
   /** The tree as it stood before the close, for an exact restore. */
   layout: LayoutNode | null
   /** Fallback address, for when the grid has been reshaped since. */
   anchor: { paneId: string; side: DockSide } | null
-  /** True while the pty and the xterm buffer behind it are still alive. */
   parked: boolean
   expiresAt: number
-  /** Pane label at the time of closing, for the toast. */
+  /** Label at the time of closing, for the toast. */
+  label: string
+}
+
+export type ClosedTabEntry = {
+  kind: 'tab'
+  tab: Tab
+  /** Where it sat in the strip, so it goes back in the same place. */
+  index: number
+  /** Every pane it held. All still alive while this entry stands. */
+  paneIds: string[]
+  parked: boolean
+  expiresAt: number
   label: string
 }
 
@@ -99,6 +144,8 @@ export type Overlay =
   | { kind: 'settings' }
   | { kind: 'shortcuts' }
   | { kind: 'confirm-close'; paneId: string }
+  /** Closing a whole grid at once, when something in it is still running. */
+  | { kind: 'confirm-close-tab'; tabId: string }
   /** Requests picked out of a browser pane's log, on their way to a CLI. */
   | { kind: 'send-to-claude'; paneId: string; uids: string[] }
 
@@ -113,7 +160,12 @@ export type AppState = {
   repos: Repo[]
   notes: Note[]
   shells: ShellProfile[]
+  /** Every grid. The active one's copy is stale — see `tabsSnapshot`. */
+  tabs: Tab[]
+  activeTabId: string
+  /** The active tab's tree. */
   layout: LayoutNode | null
+  /** Every pane in the app, across every tab. */
   panes: Pane[]
   focusedPaneId: string | null
   /** Last terminal pane to hold focus — where a note's "send" lands. */
@@ -133,8 +185,10 @@ export type AppState = {
   dragging: string | null
   /** Live drop target while dragging. */
   dropTarget: { paneId: string; side: DockSide | 'center' } | null
-  /** Closed panes still inside the reopen window, oldest first. */
-  recentlyClosed: ClosedPane[]
+  /** Tab the dragged pane is hovering over, which moves it into that grid. */
+  tabDropTarget: string | null
+  /** Panes and grids still inside the reopen window, oldest first. */
+  recentlyClosed: ClosedEntry[]
   /**
    * Panes that came back from the last session rather than being opened just
    * now. Used to honour `restoreRunsStartup`: reopening the app should not
@@ -146,6 +200,13 @@ export type AppState = {
   /** Transient toast, cleared by the UI. */
   toast: { id: number; text: string; tone: 'info' | 'error' } | null
 }
+
+/**
+ * Any change to which grid is on screen ends a drag in flight: the pane the
+ * pointer was over is not there any more, and a half-finished drop would land
+ * somewhere nobody aimed at.
+ */
+const dragCleared = { dragging: null, dropTarget: null, tabDropTarget: null }
 
 const emptyRuntime: PaneRuntime = {
   pid: null,
@@ -170,6 +231,8 @@ let state: AppState = {
   repos: [],
   notes: [],
   shells: [],
+  tabs: [],
+  activeTabId: '',
   layout: null,
   panes: [],
   focusedPaneId: null,
@@ -182,6 +245,7 @@ let state: AppState = {
   dragging: null,
   dropTarget: null,
   recentlyClosed: [],
+  tabDropTarget: null,
   restoredPaneIds: new Set<string>(),
   gridBox: { x: 0, y: 0, width: 0, height: 0 },
   toast: null
@@ -250,17 +314,104 @@ export function runtimeFor(s: AppState, paneId: string): PaneRuntime {
   return s.runtime[paneId] ?? emptyRuntime
 }
 
-export function attentionCount(s: AppState): number {
-  // Over the panes, not over the runtime map: a parked pane still has a
-  // runtime entry, and a pane you have closed must not shout at the taskbar.
-  return s.panes.filter(
-    (p) => p.id !== s.focusedPaneId && runtimeFor(s, p.id).attention !== 'none'
+// ---------------------------------------------------------------------------
+// tabs
+// ---------------------------------------------------------------------------
+
+/**
+ * The tabs, with the grid on screen written back into the active one.
+ *
+ * Everything that reads or rewrites the whole set of grids goes through this.
+ * Read the note at the top of the file for why the active tab's stored copy is
+ * allowed to be stale in the first place.
+ */
+export function tabsSnapshot(s: AppState): Tab[] {
+  return s.tabs.map((t) =>
+    t.id === s.activeTabId
+      ? { ...t, layout: s.layout, focusedPaneId: s.focusedPaneId, zoomedPaneId: s.zoomedPaneId }
+      : t
+  )
+}
+
+/** Which grid a pane is in, or null if it is in none (it was just closed). */
+export function tabOfPane(s: AppState, paneId: string | null): string | null {
+  if (!paneId) return null
+  if (findLeaf(s.layout, paneId)) return s.activeTabId
+  for (const t of s.tabs) {
+    if (t.id === s.activeTabId) continue
+    if (findLeaf(t.layout, paneId)) return t.id
+  }
+  return null
+}
+
+/** Panes in one grid, in tree order. */
+export function tabPaneIds(s: AppState, tabId: string): string[] {
+  if (tabId === s.activeTabId) return collectPaneIds(s.layout)
+  return collectPaneIds(s.tabs.find((t) => t.id === tabId)?.layout ?? null)
+}
+
+/** What a tab is called: its own name, else where it sits. */
+export function tabTitle(s: AppState, tabId: string): string {
+  const index = s.tabs.findIndex((t) => t.id === tabId)
+  if (index < 0) return 'grid'
+  return s.tabs[index].name || `grid ${index + 1}`
+}
+
+/** Panes in this grid that want the user, so a background tab can say so. */
+export function tabAttention(s: AppState, tabId: string): number {
+  return tabPaneIds(s, tabId).filter(
+    (id) => id !== s.focusedPaneId && runtimeFor(s, id).attention !== 'none'
   ).length
 }
 
-/** True while a closed pane's shell and scrollback are held for a reopen. */
+/** Live shells in this grid — what closing it would actually cost. */
+export function tabRunning(s: AppState, tabId: string): number {
+  return tabPaneIds(s, tabId).filter((id) => {
+    const pane = paneById(s, id)
+    if (pane?.kind !== 'terminal') return false
+    const rt = runtimeFor(s, id)
+    return rt.pid !== null && !rt.exited
+  }).length
+}
+
+export function attentionCount(s: AppState): number {
+  // Across every tab on purpose — a build finishing in a grid you are not
+  // looking at is exactly the thing worth being told about. Never a pane you
+  // have closed, though: it is still running and still mounted for another few
+  // seconds, and it must not go on flashing the taskbar for them.
+  const parked = parkedPaneIds(s)
+  return s.panes.filter(
+    (p) =>
+      p.id !== s.focusedPaneId &&
+      !parked.has(p.id) &&
+      runtimeFor(s, p.id).attention !== 'none'
+  ).length
+}
+
+/**
+ * True while a closed pane is still being held for a reopen — on its own, or
+ * as part of a grid that was closed around it.
+ *
+ * A parked pane is still in `panes` and still on the page. Everything that
+ * asks "what panes are there" for a reason other than rendering has to skip
+ * them, or a pane you just closed goes on flashing the taskbar and turning up
+ * as somewhere to send things.
+ */
 export function isParked(s: AppState, paneId: string): boolean {
-  return s.recentlyClosed.some((e) => e.parked && e.pane.id === paneId)
+  return s.recentlyClosed.some(
+    (e) => e.parked && (e.kind === 'pane' ? e.pane.id === paneId : e.paneIds.includes(paneId))
+  )
+}
+
+/** The panes a reopen is currently holding, in no grid and on nobody's screen. */
+export function parkedPaneIds(s: AppState): Set<string> {
+  const out = new Set<string>()
+  for (const e of s.recentlyClosed) {
+    if (!e.parked) continue
+    if (e.kind === 'pane') out.add(e.pane.id)
+    else for (const id of e.paneIds) out.add(id)
+  }
+  return out
 }
 
 /** Windows paths are case-insensitive; the git map is keyed on a stable form. */
@@ -304,20 +455,49 @@ export function hydrate(
   // always restoring and leaving the checkbox as decoration.
   const restore = persisted.settings.restoreSession !== false
   const panes = restore ? (persisted.session.panes ?? []) : []
-  const layout = restore ? normalise(persisted.session.layout) : null
+  const known = new Set(panes.map((p) => p.id))
 
-  // Drop anything the layout references but the pane list lost, and vice
-  // versa: a half-written state file should still open into a usable grid.
-  const inLayout = new Set(collectPaneIds(layout))
-  const keptPanes = panes.filter((p) => inLayout.has(p.id))
-  const known = new Set(keptPanes.map((p) => p.id))
-  let repaired: LayoutNode | null = layout
-  for (const paneId of inLayout) {
-    if (!known.has(paneId)) repaired = removePane(repaired, paneId)
-  }
+  // Two tabs sharing an id would make every lookup ambiguous. Main dedupes on
+  // the way in; this is the same guard on the way out of a file it may not
+  // have been the one to write.
+  const ids = new Set<string>()
+  const raw = (restore ? (persisted.session.tabs ?? []) : []).filter((t) => {
+    if (!t || typeof t.id !== 'string' || ids.has(t.id)) return false
+    ids.add(t.id)
+    return true
+  })
 
+  // A pane belongs to exactly one grid, and nothing in the file enforces it.
+  const layouts = claimLeaves(
+    raw.map((t) => t.layout),
+    (paneId) => known.has(paneId)
+  )
+
+  const claimed = new Set<string>()
+  const tabs: Tab[] = raw.map((t, i) => {
+    const mine = collectPaneIds(layouts[i])
+    for (const id of mine) claimed.add(id)
+    return {
+      id: t.id,
+      name: typeof t.name === 'string' ? t.name : '',
+      layout: layouts[i],
+      focusedPaneId:
+        t.focusedPaneId && mine.includes(t.focusedPaneId) ? t.focusedPaneId : (mine[0] ?? null),
+      // A pane restored zoomed is disorienting; always start on the full grid.
+      zoomedPaneId: null
+    }
+  })
+
+  if (tabs.length === 0) tabs.push(freshTab())
+
+  const keptPanes = panes.filter((p) => claimed.has(p.id))
   const runtime: Record<string, PaneRuntime> = {}
   for (const p of keptPanes) runtime[p.id] = { ...emptyRuntime }
+
+  const activeTabId = tabs.some((t) => t.id === persisted.session.activeTabId)
+    ? (persisted.session.activeTabId as string)
+    : tabs[0].id
+  const active = tabs.find((t) => t.id === activeTabId) as Tab
 
   set({
     ready: true,
@@ -327,30 +507,42 @@ export function hydrate(
     repos: persisted.repos,
     notes: persisted.notes,
     shells,
-    layout: repaired,
+    tabs,
+    activeTabId,
+    layout: active.layout,
     panes: keptPanes,
-    focusedPaneId:
-      persisted.session.focusedPaneId && known.has(persisted.session.focusedPaneId)
-        ? persisted.session.focusedPaneId
-        : (keptPanes[0]?.id ?? null),
+    focusedPaneId: active.focusedPaneId,
     zoomedPaneId: null,
     runtime
   })
 }
 
-/** The slice that gets written to disk. */
+function freshTab(name = ''): Tab {
+  return { id: newId('tab'), name, layout: null, focusedPaneId: null, zoomedPaneId: null }
+}
+
+/** The slice that gets written to disk. Version 2 is the one with tabs in it. */
 export function toPersisted(s: AppState): PersistedState {
   return {
-    version: 1,
+    version: 2,
     settings: s.settings,
     repos: s.repos,
     notes: s.notes,
     shells: s.shells.filter((sh) => !sh.builtin),
     session: {
-      layout: s.layout,
-      panes: s.panes,
-      focusedPaneId: s.focusedPaneId,
-      zoomedPaneId: null
+      // Panes being held for a reopen are in no grid, so nothing would bring
+      // them back on the next launch anyway. Left out rather than written and
+      // then dropped on the way in.
+      panes: s.panes.filter((p) => !isParked(s, p.id)),
+      // Zoom is remembered across a tab switch and not across a restart, so it
+      // is the one field of a tab that does not go to disk.
+      tabs: tabsSnapshot(s).map(({ id, name, layout, focusedPaneId }) => ({
+        id,
+        name,
+        layout,
+        focusedPaneId
+      })),
+      activeTabId: s.activeTabId
     }
   }
 }
@@ -369,14 +561,195 @@ export const actions = {
   },
 
   focusPane(paneId: string | null): void {
-    if (state.focusedPaneId === paneId) return
-    const pane = paneById(state, paneId)
-    set({
-      focusedPaneId: paneId,
-      lastTerminalPaneId: pane?.kind === 'terminal' ? pane.id : state.lastTerminalPaneId,
-      lastBrowserPaneId: pane?.kind === 'browser' ? pane.id : state.lastBrowserPaneId
-    })
+    // A pane in another grid has to have its grid brought forward first. This
+    // is reached from the taskbar's "jump to what wants you", from a note
+    // being sent to a terminal, and from a session arming a picker — none of
+    // which knows or should know which tab their target ended up in.
+    const owner = tabOfPane(state, paneId)
+    if (owner && owner !== state.activeTabId) actions.switchTab(owner)
+
+    // Not folded into the early return below: coming back to a grid whose
+    // remembered focus is the pane that was shouting lands on it already
+    // focused, and it still has to stop shouting.
+    if (state.focusedPaneId !== paneId) {
+      const pane = paneById(state, paneId)
+      set({
+        focusedPaneId: paneId,
+        lastTerminalPaneId: pane?.kind === 'terminal' ? pane.id : state.lastTerminalPaneId,
+        lastBrowserPaneId: pane?.kind === 'browser' ? pane.id : state.lastBrowserPaneId
+      })
+    }
     if (paneId) actions.clearAttention(paneId)
+  },
+
+  // --- tabs --------------------------------------------------------------
+
+  /** A new, empty grid, brought to the front. */
+  addTab(name = ''): string {
+    const tab = freshTab(name)
+    set((s) => ({
+      tabs: [...tabsSnapshot(s), tab],
+      activeTabId: tab.id,
+      layout: null,
+      focusedPaneId: null,
+      zoomedPaneId: null,
+      ...dragCleared
+    }))
+    return tab.id
+  },
+
+  /**
+   * Show another grid.
+   *
+   * Nothing is unmounted by this — the panes of every tab stay in the tree and
+   * the ones that are not on screen are hidden, which is the whole point:
+   * shells keep running, scrollback stays put and pages stay loaded. See
+   * `GridView`.
+   */
+  switchTab(tabId: string): void {
+    if (tabId === state.activeTabId) return
+    if (!state.tabs.some((t) => t.id === tabId)) return
+    set((s) => {
+      const tabs = tabsSnapshot(s)
+      const next = tabs.find((t) => t.id === tabId) as Tab
+      return {
+        tabs,
+        activeTabId: tabId,
+        layout: next.layout,
+        focusedPaneId: next.focusedPaneId,
+        zoomedPaneId: next.zoomedPaneId,
+        ...dragCleared
+      }
+    })
+  },
+
+  /** The tab `delta` along, wrapping. */
+  cycleTab(delta: number): void {
+    const index = state.tabs.findIndex((t) => t.id === state.activeTabId)
+    if (index < 0 || state.tabs.length < 2) return
+    const count = state.tabs.length
+    actions.switchTab(state.tabs[(index + delta + count) % count].id)
+  },
+
+  renameTab(tabId: string, name: string): void {
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, name: name.slice(0, 40) } : t))
+    }))
+  },
+
+  /** Reorder the strip. `toIndex` is where the tab ends up. */
+  moveTab(tabId: string, toIndex: number): void {
+    const from = state.tabs.findIndex((t) => t.id === tabId)
+    if (from < 0) return
+    const to = Math.max(0, Math.min(state.tabs.length - 1, toIndex))
+    if (to === from) return
+    set((s) => {
+      const tabs = [...s.tabs]
+      const [moved] = tabs.splice(from, 1)
+      tabs.splice(to, 0, moved)
+      return { tabs }
+    })
+  },
+
+  /**
+   * Close a whole grid and everything in it.
+   *
+   * Parked exactly like a single pane, and for the same five seconds: the tab
+   * comes off the strip but every pane it held stays in `panes`, mounted and
+   * hidden, so Ctrl+Shift+T puts the whole grid back with every shell still
+   * running and every page still loaded. Closing a grid full of agents is the
+   * most expensive misclick in the app, so it is the one most worth undoing.
+   *
+   * Returns false when there is nothing to close, including the last tab:
+   * there is no app without a grid.
+   */
+  closeTab(tabId: string): boolean {
+    const snapshot = tabsSnapshot(state)
+    if (snapshot.length < 2) return false
+    const index = snapshot.findIndex((t) => t.id === tabId)
+    if (index < 0) return false
+
+    const doomed = snapshot[index]
+    const paneIds = collectPaneIds(doomed.layout)
+    const remaining = snapshot.filter((t) => t.id !== tabId)
+    const entry: ClosedTabEntry = {
+      kind: 'tab',
+      tab: doomed,
+      index,
+      paneIds,
+      parked: paneIds.length > 0,
+      expiresAt: Date.now() + REOPEN_WINDOW_MS,
+      label: tabTitle(state, tabId)
+    }
+    // Fall to the tab on the right, then to the left — the browser gesture.
+    const next =
+      state.activeTabId === tabId
+        ? remaining[Math.min(index, remaining.length - 1)]
+        : (remaining.find((t) => t.id === state.activeTabId) as Tab)
+
+    set((s) => ({
+      tabs: remaining,
+      activeTabId: next.id,
+      layout: next.layout,
+      focusedPaneId: next.focusedPaneId,
+      zoomedPaneId: next.zoomedPaneId,
+      // The panes stay, and so stay mounted — see the note on the type.
+      overlay: s.overlay.kind === 'confirm-close-tab' ? { kind: 'none' } : s.overlay,
+      recentlyClosed: [...s.recentlyClosed, entry],
+      ...dragCleared
+    }))
+
+    if (entry.parked) actions.toast(`Closed ${entry.label} — Ctrl+Shift+T brings it back`)
+    return true
+  },
+
+  /**
+   * Move a pane into another grid.
+   *
+   * The pane itself is untouched — only the two trees change — so the xterm
+   * instance and the guest survive, for the same reason they survive a drag
+   * across the grid. Nothing switches tab: you are tidying, not going.
+   */
+  movePaneToTab(paneId: string, tabId: string): void {
+    const from = tabOfPane(state, paneId)
+    if (!from || from === tabId) return
+    if (!state.tabs.some((t) => t.id === tabId)) return
+
+    const label = paneLabel(state, paneById(state, paneId) as Pane)
+    const name = tabTitle(state, tabId)
+
+    set((s) => {
+      const tabs = tabsSnapshot(s).map((t) => {
+        if (t.id === from) return withoutPane(t, paneId)
+        if (t.id === tabId) {
+          return {
+            ...t,
+            layout: autoAppend(t.layout, paneId, s.gridBox, s.settings.gutter),
+            focusedPaneId: paneId
+          }
+        }
+        return t
+      })
+      const active = tabs.find((t) => t.id === s.activeTabId) as Tab
+      return {
+        tabs,
+        layout: active.layout,
+        focusedPaneId: active.focusedPaneId,
+        zoomedPaneId: active.zoomedPaneId,
+        ...dragCleared
+      }
+    })
+
+    actions.toast(`Moved ${label} to ${name}`)
+  },
+
+  setTabDropTarget(tabId: string | null): void {
+    if (state.tabDropTarget === tabId) return
+    // Exclusive with the in-grid preview. The grid stops seeing pointer moves
+    // the moment the cursor is over the strip, so its indicator would freeze
+    // where it last was and go on promising a landing spot that is not where
+    // the pane is about to go.
+    set(tabId ? { tabDropTarget: tabId, dropTarget: null } : { tabDropTarget: null })
   },
 
   // --- panes -------------------------------------------------------------
@@ -577,9 +950,17 @@ export const actions = {
 
   /**
    * Close a pane and remember it for REOPEN_WINDOW_MS, so Ctrl+Shift+T can
-   * bring it back. A terminal whose shell is still alive is *parked* rather
-   * than killed: nothing is torn down until the window passes, which is what
-   * makes the reopen the same session and not a lookalike.
+   * bring it back.
+   *
+   * Anything with something live behind it is *parked* rather than closed: it
+   * comes out of its grid but stays in `panes`, so it stays mounted and hidden
+   * and nothing is torn down until the window passes. That is what makes the
+   * reopen the same thing and not a lookalike — a terminal keeps its shell and
+   * its scrollback, and a browser pane keeps its page, its scroll position,
+   * its network log and any comments written on it.
+   *
+   * A note is not parked: the note itself lives in the store, so there is
+   * nothing to hold. Nor is a terminal whose shell has already exited.
    *
    * @param opts.remember pass false when the pane is being replaced rather
    *   than closed (restarting a dead shell, say) so it does not sit in the
@@ -589,15 +970,28 @@ export const actions = {
     const pane = paneById(state, paneId)
     const runtime = runtimeFor(state, paneId)
     const remember = pane !== null && opts.remember !== false
-    // Nothing to hold on to for a note, or for a shell that has already gone.
-    const parked = remember && pane.kind === 'terminal' && runtime.pid !== null && !runtime.exited
+    const parked =
+      remember &&
+      (pane.kind === 'browser' ||
+        (pane.kind === 'terminal' && runtime.pid !== null && !runtime.exited))
 
-    const entry: ClosedPane | null =
+    // Addressed by grid rather than assumed to be the one on screen. Nothing
+    // in the UI can close a hidden pane today, but the reopen has to know
+    // which tab to put it back into either way.
+    const owner = tabOfPane(state, paneId) ?? state.activeTabId
+    const home =
+      owner === state.activeTabId
+        ? state.layout
+        : (state.tabs.find((t) => t.id === owner)?.layout ?? null)
+
+    const entry: ClosedEntry | null =
       remember && pane
         ? {
+            kind: 'pane',
             pane,
-            layout: state.layout,
-            anchor: anchorFor(state.layout, paneId),
+            tabId: owner,
+            layout: home,
+            anchor: anchorFor(home, paneId),
             parked,
             expiresAt: Date.now() + REOPEN_WINDOW_MS,
             label: paneLabel(state, pane)
@@ -605,32 +999,34 @@ export const actions = {
         : null
 
     set((s) => {
-      const layout = removePane(s.layout, paneId)
-      const panes = s.panes.filter((p) => p.id !== paneId)
+      const tabs = tabsSnapshot(s).map((t) => (t.id === owner ? withoutPane(t, paneId) : t))
+      const active = tabs.find((t) => t.id === s.activeTabId) as Tab
       const runtimeMap = { ...s.runtime }
       // A parked pane keeps its runtime: the pty behind it is still running,
       // and adopting it back has to find the same pid and shell.
       if (!parked) delete runtimeMap[paneId]
-      const remaining = collectPaneIds(layout)
       return {
-        layout,
-        panes,
+        tabs,
+        layout: active.layout,
+        // A parked pane stays in the list, and so stays mounted. Taking it out
+        // is what would destroy it — React would unmount the component, and
+        // with it the xterm host and the <webview>'s guest.
+        panes: parked ? s.panes : s.panes.filter((p) => p.id !== paneId),
         runtime: runtimeMap,
-        focusedPaneId:
-          s.focusedPaneId === paneId ? (remaining[remaining.length - 1] ?? null) : s.focusedPaneId,
-        zoomedPaneId: s.zoomedPaneId === paneId ? null : s.zoomedPaneId,
+        focusedPaneId: active.focusedPaneId,
+        zoomedPaneId: active.zoomedPaneId,
         overlay: s.overlay.kind === 'confirm-close' ? { kind: 'none' } : s.overlay,
         recentlyClosed: entry ? [...s.recentlyClosed, entry] : s.recentlyClosed
       }
     })
 
-    // Only worth saying when there is something running to lose.
+    // Only worth saying when there is something to lose.
     if (entry?.parked) actions.toast(`Closed ${entry.label} — Ctrl+Shift+T brings it back`)
   },
 
   /**
-   * Bring back the pane closed most recently, if its window has not passed.
-   * Returns false when there is nothing left to bring back.
+   * Bring back the last thing you closed, whatever it was — a pane, or a whole
+   * grid. Returns false when there is nothing left inside the window.
    */
   reopenLast(): boolean {
     const now = Date.now()
@@ -638,12 +1034,37 @@ export const actions = {
     const entry = live[live.length - 1]
     if (!entry) return false
 
+    if (entry.kind === 'tab') {
+      set((s) => {
+        const tabs = tabsSnapshot(s)
+        // Back where it sat, unless the strip has since got shorter.
+        tabs.splice(Math.min(entry.index, tabs.length), 0, entry.tab)
+        return {
+          tabs,
+          activeTabId: entry.tab.id,
+          // Its panes never left `panes`, so the tree it comes back with still
+          // points at the same live components.
+          layout: entry.tab.layout,
+          focusedPaneId: entry.tab.focusedPaneId,
+          zoomedPaneId: entry.tab.zoomedPaneId,
+          recentlyClosed: s.recentlyClosed.filter((e) => e !== entry),
+          ...dragCleared
+        }
+      })
+      return true
+    }
+
     const pane = entry.pane
     // A note deleted in the meantime has nothing left to come back to.
     if (pane.kind === 'note' && !noteById(state, pane.noteId)) {
       set((s) => ({ recentlyClosed: s.recentlyClosed.filter((e) => e !== entry) }))
       return actions.reopenLast()
     }
+
+    // Back into the grid it was closed out of, which may not be the one on
+    // screen. Going there first is also what puts the restore in front of the
+    // user rather than behind a tab they are not looking at.
+    if (state.tabs.some((t) => t.id === entry.tabId)) actions.switchTab(entry.tabId)
 
     set((s) => {
       const current = new Set(collectPaneIds(s.layout))
@@ -664,7 +1085,9 @@ export const actions = {
       }
 
       return {
-        panes: [...s.panes, pane],
+        // A parked pane never left the list — putting it back would render it
+        // twice. Anything else is re-appended, which is a fresh component.
+        panes: entry.parked ? s.panes : [...s.panes, pane],
         layout,
         focusedPaneId: pane.id,
         lastTerminalPaneId: pane.kind === 'terminal' ? pane.id : s.lastTerminalPaneId,
@@ -677,16 +1100,32 @@ export const actions = {
     return true
   },
 
-  /** Forget closed panes whose window has passed and whose resources are gone. */
-  dropClosed(paneIds: string[]): void {
-    if (paneIds.length === 0) return
-    const drop = new Set(paneIds)
+  /**
+   * Let go of everything whose reopen window has passed.
+   *
+   * Dropping a parked pane out of `panes` is the whole of it: that unmounts
+   * the component, and each kind's own cleanup does its own killing — the pty
+   * and the xterm instance for a terminal, the debugger and the network log
+   * for a browser pane. Same path as any other close, so there is one place
+   * that ends a pane rather than two that have to agree.
+   */
+  dropExpired(now = Date.now()): void {
+    const expired = state.recentlyClosed.filter((e) => e.expiresAt <= now)
+    if (expired.length === 0) return
+
+    const gone = new Set<string>()
+    for (const e of expired) {
+      if (e.kind === 'pane') gone.add(e.pane.id)
+      else for (const id of e.paneIds) gone.add(id)
+    }
+
     set((s) => {
       const runtime = { ...s.runtime }
-      for (const id of drop) delete runtime[id]
+      for (const id of gone) delete runtime[id]
       return {
+        panes: s.panes.filter((p) => !gone.has(p.id)),
         runtime,
-        recentlyClosed: s.recentlyClosed.filter((e) => !drop.has(e.pane.id))
+        recentlyClosed: s.recentlyClosed.filter((e) => !expired.includes(e))
       }
     })
   },
@@ -713,7 +1152,7 @@ export const actions = {
   },
 
   beginDrag(paneId: string): void {
-    set({ dragging: paneId, zoomedPaneId: null })
+    set({ dragging: paneId, zoomedPaneId: null, tabDropTarget: null })
   },
 
   setDropTarget(target: AppState['dropTarget']): void {
@@ -723,8 +1162,12 @@ export const actions = {
   },
 
   endDrag(commit: boolean): void {
-    const { dragging, dropTarget } = state
-    if (commit && dragging && dropTarget && dropTarget.paneId !== dragging) {
+    const { dragging, dropTarget, tabDropTarget } = state
+    if (commit && dragging && tabDropTarget) {
+      // Dropped on the tab strip: the pane changes grid rather than moving
+      // inside one. Nothing is unmounted by it — see `movePaneToTab`.
+      actions.movePaneToTab(dragging, tabDropTarget)
+    } else if (commit && dragging && dropTarget && dropTarget.paneId !== dragging) {
       if (dropTarget.side === 'center') {
         set((s) => ({ layout: swapPanes(s.layout, dragging, dropTarget.paneId) }))
       } else {
@@ -734,7 +1177,7 @@ export const actions = {
       }
       set({ focusedPaneId: dragging })
     }
-    set({ dragging: null, dropTarget: null })
+    set({ dragging: null, dropTarget: null, tabDropTarget: null })
   },
 
   // --- repos -------------------------------------------------------------
@@ -845,6 +1288,19 @@ export const actions = {
 
   clearToast(): void {
     if (state.toast) set({ toast: null })
+  }
+}
+
+/** Take a pane out of one grid, keeping that grid's own focus and zoom honest. */
+function withoutPane(tab: Tab, paneId: string): Tab {
+  const layout = removePane(tab.layout, paneId)
+  const left = collectPaneIds(layout)
+  return {
+    ...tab,
+    layout,
+    focusedPaneId:
+      tab.focusedPaneId === paneId ? (left[left.length - 1] ?? null) : tab.focusedPaneId,
+    zoomedPaneId: tab.zoomedPaneId === paneId ? null : tab.zoomedPaneId
   }
 }
 

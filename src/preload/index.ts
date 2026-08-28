@@ -19,6 +19,7 @@ import type {
   RepoScanResult,
   Settings,
   ShellProfile,
+  SkillStatus,
   ViewportId
 } from '../shared/types'
 
@@ -142,6 +143,17 @@ const api = {
     /** Hand a pane's comments to whichever session is waiting for them. */
     sendComments: (batch: CommentBatch): Promise<{ taken: boolean }> =>
       ipcRenderer.invoke(CH.browserSendComments, batch)
+  },
+
+  /**
+   * The `/grid-browser` skill. Read-only until the user asks for it: `install`
+   * is only ever reached from a button, and it writes nothing but the skill's
+   * own two files.
+   */
+  skill: {
+    status: (): Promise<SkillStatus> => ipcRenderer.invoke(CH.skillStatus),
+    install: (): Promise<{ ok: true; dir: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(CH.skillInstall)
   },
 
   window: {

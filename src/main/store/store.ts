@@ -16,7 +16,14 @@ import path from 'node:path'
 import { VIEWPORT_ORDER, isWebUrl } from '../../shared/browser'
 import { CLAUDE_EFFORTS, isSafeFlagValue } from '../../shared/claude'
 import { sanitiseLayout } from '../../shared/layout'
-import type { BrowserPane, PersistedState, Settings, WindowBounds } from '../../shared/types'
+import type {
+  BrowserPane,
+  Pane,
+  PersistedState,
+  Settings,
+  TabState,
+  WindowBounds
+} from '../../shared/types'
 import { STATE_VERSION, defaultSettings, defaultState } from './defaults'
 
 const WRITE_DEBOUNCE_MS = 400
@@ -238,6 +245,47 @@ function sanitiseBrowserPane(pane: BrowserPane): BrowserPane {
 }
 
 /**
+ * The tabs, however they were written.
+ *
+ * A version 1 file has one grid at the top of `session` and no tabs at all;
+ * that becomes the single tab everything carries on inside, so upgrading GRID
+ * costs nobody their layout.
+ *
+ * Every layout goes through `sanitiseLayout` because it is the one deeply
+ * nested thing in this file and the one thing the renderer cannot survive
+ * being malformed: a bad node makes `normalise` throw inside hydrate, and the
+ * app comes up as a blank grid with no message and no way back.
+ */
+function migrateTabs(raw: Record<string, unknown>): TabState[] {
+  const list = Array.isArray(raw.tabs)
+    ? (raw.tabs as unknown[])
+    : [{ id: 'tab_1', name: '', layout: raw.layout, focusedPaneId: raw.focusedPaneId }]
+
+  const seen = new Set<string>()
+  const tabs: TabState[] = []
+
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue
+    const t = entry as Record<string, unknown>
+    // Two tabs sharing an id would make every lookup ambiguous, and the file
+    // is plain JSON somebody may well have copy-pasted a block inside.
+    let id = typeof t.id === 'string' && t.id ? t.id : `tab_${tabs.length + 1}`
+    while (seen.has(id)) id = `${id}_${tabs.length + 1}`
+    seen.add(id)
+
+    tabs.push({
+      id,
+      name: typeof t.name === 'string' ? t.name.slice(0, 40) : '',
+      layout: sanitiseLayout(t.layout),
+      focusedPaneId: typeof t.focusedPaneId === 'string' ? t.focusedPaneId : null
+    })
+  }
+
+  // There is no app without a grid to put panes in.
+  return tabs.length > 0 ? tabs : [{ id: 'tab_1', name: '', layout: null, focusedPaneId: null }]
+}
+
+/**
  * Bring any older or hand-edited file up to the current shape. Every field is
  * defaulted individually so a partially written or manually trimmed file still
  * boots instead of throwing on a missing key.
@@ -265,8 +313,12 @@ function migrate(input: PersistedState | null): PersistedState {
 
   const session = base.session
   if (input.session && typeof input.session === 'object') {
-    if (Array.isArray(input.session.panes)) {
-      session.panes = input.session.panes
+    // Read loosely: this is the one part of the file whose shape changed
+    // between versions, and a v1 file has a grid here where v2 has a list.
+    const raw = input.session as unknown as Record<string, unknown>
+
+    if (Array.isArray(raw.panes)) {
+      session.panes = (raw.panes as Pane[])
         .filter(
           (p) =>
             p &&
@@ -275,15 +327,13 @@ function migrate(input: PersistedState | null): PersistedState {
         )
         .map((p) => (p.kind === 'browser' ? sanitiseBrowserPane(p) : p))
     }
-    // The layout is the one deeply nested thing in this file, and it is the one
-    // thing the renderer cannot survive being malformed: a bad node makes
-    // `normalise` throw inside hydrate, and the app comes up as a blank grid
-    // with no message and no way back. Validate the shape here instead.
-    session.layout = sanitiseLayout(input.session.layout)
-    session.focusedPaneId =
-      typeof input.session.focusedPaneId === 'string' ? input.session.focusedPaneId : null
-    // A pane restored zoomed is disorienting; always start on the full grid.
-    session.zoomedPaneId = null
+
+    session.tabs = migrateTabs(raw)
+    const activeTabId = raw.activeTabId
+    session.activeTabId =
+      typeof activeTabId === 'string' && session.tabs.some((t) => t.id === activeTabId)
+        ? activeTabId
+        : (session.tabs[0]?.id ?? null)
   }
 
   const shells = Array.isArray(input.shells)

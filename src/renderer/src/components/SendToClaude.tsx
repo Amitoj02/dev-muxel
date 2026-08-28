@@ -34,7 +34,15 @@ import {
 } from '../../../shared/claude'
 import { netLogFor, useNetLog } from '../browser/netlog'
 import { getSession } from '../terminal/session'
-import { actions, paneById, paneLabel, repoById, runtimeFor, useApp } from '../state/hooks'
+import {
+  actions,
+  isParked,
+  paneById,
+  paneLabel,
+  repoById,
+  runtimeFor,
+  useApp
+} from '../state/hooks'
 import { Overlay } from './Overlay'
 
 /**
@@ -477,10 +485,14 @@ function useTargets(app: ReturnType<typeof useApp>, pane: Pane | null): Targets 
     const repoId = pane && pane.kind === 'browser' ? pane.repoId : null
     // A pane whose shell has exited still has an xterm session holding its
     // scrollback, and pasting into it would go nowhere while the dialog said
-    // it had worked.
+    // it had worked. Nor is a pane being held for a reopen a target: it is off
+    // the grid already, and in a few seconds it will be gone.
     const live = app.panes.filter(
       (p): p is TerminalPane =>
-        p.kind === 'terminal' && Boolean(getSession(p.id)) && !runtimeFor(app, p.id).exited
+        p.kind === 'terminal' &&
+        Boolean(getSession(p.id)) &&
+        !runtimeFor(app, p.id).exited &&
+        !isParked(app, p.id)
     )
 
     const score = (p: TerminalPane): number => {

@@ -14,6 +14,7 @@
 import {
   anchorFor,
   autoAppend,
+  claimLeaves,
   collectPaneIds,
   countLeaves,
   dockZone,
@@ -558,6 +559,66 @@ assertTiling('split-bottom', tree)
     deepThrew = true
   }
   check('sanitise: a 200-deep tree is handled without throwing', !deepThrew)
+}
+
+// ---------------------------------------------------------------------------
+// One pane, one grid: the invariant tabs add
+// ---------------------------------------------------------------------------
+
+{
+  const grid = (...paneIds: string[]): LayoutNode | null =>
+    paneIds.reduce<LayoutNode | null>(
+      (tree, id, i) => (i === 0 ? leaf(id) : splitPane(tree, paneIds[i - 1], 'right', id)),
+      null
+    )
+
+  // The ordinary case: nothing shared, nothing missing, nothing changes.
+  {
+    const before = [grid('a', 'b'), grid('c')]
+    const after = claimLeaves(before, () => true)
+    check('claim: intact grids keep every pane', collectPaneIds(after[0]).join() === 'a,b')
+    check('claim: and the second one too', collectPaneIds(after[1]).join() === 'c')
+    after.forEach((t, i) => assertInvariants(`claim-intact-${i}`, t))
+  }
+
+  // A pane named by two grids belongs to the first one that named it.
+  {
+    const after = claimLeaves([grid('a', 'b'), grid('b', 'c')], () => true)
+    check('claim: the first grid keeps the shared pane', collectPaneIds(after[0]).join() === 'a,b')
+    check('claim: the second loses it', collectPaneIds(after[1]).join() === 'c')
+    const all = after.flatMap((t) => collectPaneIds(t))
+    check('claim: no pane is in two grids', new Set(all).size === all.length)
+    after.forEach((t, i) => assertInvariants(`claim-shared-${i}`, t))
+  }
+
+  // A pane the pane list lost leaves no hole behind it.
+  {
+    const live = new Set(['a', 'c'])
+    const after = claimLeaves([grid('a', 'b'), grid('c')], (id) => live.has(id))
+    check('claim: a pane with nothing behind it is dropped', collectPaneIds(after[0]).join() === 'a')
+    check('claim: its neighbours are untouched', collectPaneIds(after[1]).join() === 'c')
+    check('claim: a one-pane grid collapses to a leaf', after[0]?.kind === 'leaf')
+    after.forEach((t, i) => assertInvariants(`claim-missing-${i}`, t))
+  }
+
+  // Every pane gone means an empty grid, not a split of nothing.
+  {
+    const after = claimLeaves([grid('a', 'b'), null], () => false)
+    check('claim: a grid whose panes all went is empty', after[0] === null)
+    check('claim: an empty grid stays empty', after[1] === null)
+  }
+
+  // Both failure modes at once, which is what a half-written file looks like.
+  {
+    const live = new Set(['a', 'b'])
+    const after = claimLeaves([grid('a', 'gone'), grid('a', 'b'), grid('gone')], (id) =>
+      live.has(id)
+    )
+    check('claim: mixed — first grid keeps only what is real', collectPaneIds(after[0]).join() === 'a')
+    check('claim: mixed — second loses the pane already claimed', collectPaneIds(after[1]).join() === 'b')
+    check('claim: mixed — a grid of only dead panes empties', after[2] === null)
+    after.forEach((t, i) => assertInvariants(`claim-mixed-${i}`, t))
+  }
 }
 
 console.log(

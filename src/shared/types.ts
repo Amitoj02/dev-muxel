@@ -229,14 +229,39 @@ export type Settings = {
 }
 
 // ---------------------------------------------------------------------------
+// Tabs
+// ---------------------------------------------------------------------------
+
+/**
+ * One whole grid.
+ *
+ * Panes live in a single flat list on the session, not inside the tab: a tab
+ * is only the tree saying which of them it shows and how they are arranged.
+ * That is what makes moving a pane between tabs a change of address rather
+ * than a rebuild — the component is never unmounted, so the shell behind a
+ * terminal and the page behind a browser pane both survive the move, for the
+ * same reason they survive being dragged across the grid.
+ *
+ * A pane id must appear in exactly one tab's layout. Nothing enforces that in
+ * the file, so `hydrate` does it on the way in.
+ */
+export type TabState = {
+  id: string
+  /** Empty means "unnamed"; the UI numbers those. */
+  name: string
+  layout: LayoutNode | null
+  focusedPaneId: string | null
+}
+
+// ---------------------------------------------------------------------------
 // Persisted session
 // ---------------------------------------------------------------------------
 
 export type SessionState = {
-  layout: LayoutNode | null
+  /** Every pane in the app, across every tab. */
   panes: Pane[]
-  focusedPaneId: string | null
-  zoomedPaneId: string | null
+  tabs: TabState[]
+  activeTabId: string | null
 }
 
 export type PersistedState = {
@@ -283,6 +308,19 @@ export type PtyDataEvent = {
   data: string
   /** Running total of bytes main has sent for this pane; echoed back on ack. */
   seq: number
+}
+
+/**
+ * Whether the `/grid-browser` skill is installed for the user, and whether it
+ * is the one this build of GRID ships. A copy with no version stamp was
+ * written by hand and counts as out of date — see `main/browser/skill.ts`.
+ */
+export type SkillStatus = {
+  installed: boolean
+  version: number | null
+  current: boolean
+  /** Where it is, or would go, so the UI can name it. */
+  dir: string
 }
 
 export type RepoScanResult = {

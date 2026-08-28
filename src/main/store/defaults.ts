@@ -1,6 +1,10 @@
 import type { PersistedState, Settings } from '../../shared/types'
 
-export const STATE_VERSION = 1
+/**
+ * 1 -> 2: one grid at the top of `session` became a list of tabs. `migrate`
+ * still reads the old shape and folds it into a single tab.
+ */
+export const STATE_VERSION = 2
 
 export const defaultSettings: Settings = {
   defaultShellId: 'powershell',
@@ -41,10 +45,9 @@ export function defaultState(): PersistedState {
     repos: [],
     notes: [],
     session: {
-      layout: null,
       panes: [],
-      focusedPaneId: null,
-      zoomedPaneId: null
+      tabs: [],
+      activeTabId: null
     },
     shells: []
   }

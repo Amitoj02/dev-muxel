@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Repo, TerminalPane as TerminalPaneModel } from '../../../shared/types'
-import { actions, getState, isParked, paneById, useApp } from '../state/hooks'
+import { actions, getState, paneById, useApp } from '../state/hooks'
 import {
   createSession,
   destroySession,
@@ -142,15 +142,13 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
 
     return () => {
       const s = getState()
-      // Closed, but inside the reopen window: leave the shell running and the
-      // buffer intact. useRecentlyClosed reaps it once the window passes.
-      if (isParked(s, pane.id)) {
-        session.park()
-        return
-      }
-      // Still on the grid, so this is a remount rather than a close, and the
-      // spawn above may still be in flight: cancelling it here would leave the
-      // pane with a live pty whose pid it never learned.
+      // Still in the pane list, so this is a remount rather than a close, and
+      // the spawn above may still be in flight: cancelling it here would leave
+      // the pane with a live pty whose pid it never learned.
+      //
+      // That covers the reopen window too. A pane closed inside it is parked,
+      // which means it stays in the list and this never runs — nothing is torn
+      // down until `dropExpired` finally takes it out.
       if (paneById(s, pane.id)) return
 
       cancelled = true

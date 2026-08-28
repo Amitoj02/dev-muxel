@@ -39,7 +39,13 @@ export {
   REOPEN_WINDOW_MS,
   runtimeFor,
   shellById,
-  subscribe
+  subscribe,
+  tabAttention,
+  tabOfPane,
+  tabPaneIds,
+  tabRunning,
+  tabsSnapshot,
+  tabTitle
 } from './store'
 
-export type { AppState, ClosedPane, Overlay, PaneRuntime } from './store'
+export type { AppState, ClosedEntry, Overlay, PaneRuntime, Tab } from './store'

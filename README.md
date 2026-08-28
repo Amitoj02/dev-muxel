@@ -63,13 +63,36 @@ its settings:
 | **Where it runs** | a browser pane opened here starts on this URL |
 
 **3. Open terminals.** `+` on a repository row, or `＋ Terminal` in the titlebar,
-which reuses the focused pane's repository. The globe next to it opens a browser
-pane on the same project.
+which drops down the list of repositories so you can say which one — plus
+`Choose a folder…` for somewhere you have not declared. `Ctrl+Alt+T` skips the
+menu and reuses the focused pane's repository. `＋ Browser` opens a browser pane
+on the same project.
 
 **4. Build the grid.** Drag a pane by its header onto another pane; the half you
 hover over becomes the split. Drop it in the middle to swap the two. Drag the
 gutters between panes to resize. `⤢` fills the window with one pane, and `Esc`
 puts it back.
+
+## Tabs
+
+The row under the titlebar is one entry per grid. A tab is a whole grid of its
+own — its own panes, its own splits, its own zoom — so you can keep one laid
+out for the thing you are shipping and open another for the thing that just
+came in, without taking the first one apart.
+
+Nothing in a tab stops when you leave it. Shells keep running, terminals keep
+their scrollback, browser panes keep the page they were on, and a pane that
+starts wanting you puts a red dot on its tab and counts towards the `N waiting`
+in the titlebar — click that and GRID brings the right grid forward on its own.
+
+`+` opens a new one. Double-click a tab to name it, drag it along the strip to
+reorder it, and drag a *pane* by its header onto a tab to move it into that
+grid — nothing restarts, exactly like dragging one across a grid.
+
+`Ctrl+Alt+Shift+T` opens a grid, `Ctrl+PageUp` / `Ctrl+PageDown` move between
+them, `Ctrl+Alt+Shift+W` closes one. Closing a grid is undoable for five
+seconds like anything else — `Ctrl+Shift+T` puts it back with everything in it
+still running — and GRID asks first anyway when something in it is.
 
 ## Reading a pane
 
@@ -92,11 +115,20 @@ another window, its taskbar button flashes and the window title becomes
 
 ## Closed one by mistake
 
-`Ctrl+Shift+T` brings back the pane you just closed. For five seconds after a
-close the shell is still running and its scrollback is still in memory, so you
-get the same session back, in the same slot in the grid — not a new terminal
-that looks like it. Press it again to walk further back through anything else
-you closed inside that window. After five seconds it is properly gone.
+`Ctrl+Shift+T` brings back the last thing you closed. For five seconds after a
+close nothing behind it has actually stopped, so you get the same thing back
+rather than one that looks like it:
+
+- **A terminal** comes back with its shell still running and its scrollback
+  intact, in the same slot in the grid.
+- **A browser pane** comes back on the same page — not reloaded. The scroll
+  position, whatever you had typed into it, its network log and any comments
+  you had written on it are all still there.
+- **A whole grid**, if a tab is what you closed. It goes back in the same place
+  on the strip with every pane in it still running.
+
+Press it again to walk further back through anything else you closed inside
+that window. After five seconds it is properly gone.
 
 ## The browser
 
@@ -116,7 +148,7 @@ points at an element, `NET` opens the network log.
 
 ### Marking a page up
 
-The `⌖` button opens the pane's comments, and `point at something` turns the
+The `⌖` button opens the pane's comments, and `Select Element` turns the
 selector on. Hover and every element under the cursor is outlined with its tag
 and size; click one and a box opens over the page for you to say what is wrong
 with it. `Enter` adds the comment.
@@ -140,6 +172,12 @@ will happily give you.
 
 ### Handing them to Claude
 
+The comments bar carries `add the skill` when the `/grid-browser` skill is
+missing from your machine, or `update the skill` when the copy you have was not
+written by this build of GRID. Press it and GRID writes both halves — the skill
+and the script it runs — into `~/.claude/skills/grid-browser/`. The button is
+gone once they match, because there is then nothing to do about it.
+
 In any Claude session, anywhere on the machine, run:
 
 ```
@@ -156,10 +194,11 @@ prefer — the send button is always there, and it says when a session is
 waiting. If no browser pane is open, the skill fails and says so rather than
 waiting for something that cannot happen.
 
-The skill lives in `~/.claude/skills/grid-browser/`. It finds GRID through a
-loopback port and token that GRID writes to `%APPDATA%\GRID\bridge.json` while
-it runs, so it works wherever GRID was started from — and stops working the
-moment GRID does.
+The skill lives in `~/.claude/skills/grid-browser/`, and ships with GRID in
+[`resources/skills/`](./resources/skills) so the two halves cannot drift apart.
+It finds GRID through a loopback port and token that GRID writes to
+`%APPDATA%\GRID\bridge.json` while it runs, so it works wherever GRID was
+started from — and stops working the moment GRID does.
 
 ### The network log
 
@@ -228,15 +267,18 @@ effort GRID starts a Claude session with when you ask it to.
 
 ## Keyboard
 
-Nothing uses a plain `Ctrl` key: Claude and every other CLI keep the whole
-keyboard to themselves, `Esc` included.
+Nothing uses a plain `Ctrl` letter: Claude and every other CLI keep those to
+themselves, `Esc` included. The zoom and page keys are the only exceptions, and
+no CLI binds either.
 
 | | |
 |---|---|
 | `Ctrl+Alt+T` / `N` / `G` | new terminal / new note / new browser pane |
+| `Ctrl+Alt+Shift+T` / `W` | new grid, in its own tab / close this grid |
+| `Ctrl+PageUp` / `PageDown` | previous / next grid |
 | `Ctrl+Alt+D` / `S` | split the focused pane right / down |
 | `Ctrl+Alt+W` | close the focused pane |
-| `Ctrl+Shift+T` | bring back the pane you just closed |
+| `Ctrl+Shift+T` | bring back the pane, or the grid, you just closed |
 | `Ctrl+Alt+Z` | fill the window, and back again |
 | `Ctrl+Alt+←↑→↓` | move focus that way |
 | `Ctrl+Alt+1…9` | focus pane N, in reading order |

@@ -6,16 +6,32 @@
  * has to opt back out — otherwise the click is swallowed by the window move.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { IconClose, IconMaximise, IconMinimise, IconPlus, IconRestore } from './Icons'
-import { actions, attentionCount, runtimeFor, useApp } from '../state/hooks'
+import { MenuPopover } from './MenuPopover'
+import { NewTerminalMenu } from './NewTerminalMenu'
+import { focusPaneHard } from '../lib/focus'
+import { actions, attentionCount, isParked, runtimeFor, useApp } from '../state/hooks'
 
 const NO_DRAG = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export function TitleBar(): React.JSX.Element {
   const app = useApp()
   const [maximised, setMaximised] = useState(false)
+  /**
+   * The open menu, carrying the button it hangs off.
+   *
+   * The element rather than a ref: the popover needs it both to place itself
+   * and to know which pointerdown is its own opener rather than a click
+   * outside, and reading a ref during render is neither allowed nor honest —
+   * the first render after opening would find it null.
+   */
+  const [menu, setMenu] = useState<{ kind: 'terminal'; anchor: HTMLElement } | null>(null)
   const waiting = attentionCount(app)
+
+  // Stable, because `MenuPopover` binds window listeners keyed on it and this
+  // component re-renders on every store change.
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   useEffect(() => {
     let alive = true
@@ -30,11 +46,18 @@ export function TitleBar(): React.JSX.Element {
   }, [])
 
   const jumpToWaiting = (): void => {
+    // Across every tab: focusPane brings the right grid forward, which is the
+    // whole point of the count being an app-wide one. Never a pane being held
+    // for a reopen — it is in no grid, so there would be nothing to jump to,
+    // and `attentionCount` does not count it either.
     const target = app.panes.find(
-      (p) => p.id !== app.focusedPaneId && runtimeFor(app, p.id).attention !== 'none'
+      (p) =>
+        p.id !== app.focusedPaneId &&
+        !isParked(app, p.id) &&
+        runtimeFor(app, p.id).attention !== 'none'
     )
     if (target) {
-      actions.focusPane(target.id)
+      focusPaneHard(target.id)
       actions.clearAttention(target.id)
     }
   }
@@ -48,10 +71,17 @@ export function TitleBar(): React.JSX.Element {
       <div className="titlebar__rule" />
 
       <nav className="titlebar__menu" style={NO_DRAG}>
+        {/* Asks which repository rather than guessing. Ctrl+Alt+T still
+            guesses — there is nowhere to hang a menu off a keystroke, and
+            speed is the point of it. */}
         <button
           className="menu-item"
-          onClick={() => actions.addTerminalSmart()}
-          title="New terminal — Ctrl+Alt+T"
+          data-active={menu?.kind === 'terminal'}
+          onClick={(e) => {
+            const anchor = e.currentTarget
+            setMenu((open) => (open?.kind === 'terminal' ? null : { kind: 'terminal', anchor }))
+          }}
+          title="New terminal — Ctrl+Alt+T opens one without asking"
         >
           <IconPlus size={10} /> Terminal
         </button>
@@ -90,6 +120,12 @@ export function TitleBar(): React.JSX.Element {
           Settings
         </button>
       </nav>
+
+      {menu?.kind === 'terminal' && (
+        <MenuPopover anchorEl={menu.anchor} onClose={closeMenu}>
+          <NewTerminalMenu onClose={closeMenu} />
+        </MenuPopover>
+      )}
 
       <div className="titlebar__drag" />
 

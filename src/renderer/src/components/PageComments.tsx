@@ -12,11 +12,12 @@
  * put in a dialog. A box over the page, and a list behind a number.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PageComment, PickedElement, ViewportPreset } from '../../../shared/browser'
+import type { SkillStatus } from '../../../shared/types'
 import { rememberBatch, removeComment, updateComment } from '../browser/netlog'
 import { actions } from '../state/hooks'
-import { IconClose, IconPick, IconSend, IconTrash } from './Icons'
+import { IconClose, IconPick, IconPlus, IconSend, IconTrash } from './Icons'
 
 /** Where the comment box sits, given where the element is on screen. */
 function anchorFor(
@@ -136,6 +137,7 @@ export function CommentsPanel({
   onClose: () => void
 }): React.JSX.Element {
   const [note, setNote] = useState('')
+  const skill = useSkill()
 
   const addNote = (): void => {
     const said = note.trim()
@@ -150,18 +152,49 @@ export function CommentsPanel({
         <span className="netlog__count">
           {comments.length} comment{comments.length === 1 ? '' : 's'}
         </span>
+        {/* The one filled button in a bar of hairlines: it is what the panel is
+            for, and it was being missed as another dim outline among several.
+            The label is its own element rather than a bare text child, so the
+            icon and the words are two flex items that cannot come apart. */}
         <button
-          className="netlog__toggle"
+          className="netlog__select"
           data-on={picking}
           onClick={onTogglePicker}
           title={
             picking
-              ? 'Stop pointing — it stays on until you say otherwise'
-              : 'Point at things in the page, one after another'
+              ? 'Stop selecting — it stays on until you say otherwise'
+              : 'Select an element in the page, then say what is wrong with it'
           }
         >
-          <IconPick size={10} /> {picking ? 'pointing — click to stop' : 'point at something'}
+          <IconPick size={12} />
+          <span>{picking ? 'Stop Selecting' : 'Select Element'}</span>
         </button>
+
+        {/*
+          Only on screen when there is something to do about it. Sending is
+          half a handshake — the other half is a skill in the user's home
+          directory, and until this build wrote it there is no way to tell
+          whether the copy they have still matches this GRID.
+        */}
+        {skill.status && !skill.status.current && (
+          <button
+            className="netlog__skill"
+            disabled={skill.busy}
+            onClick={skill.install}
+            title={
+              skill.status.installed
+                ? `Your /grid-browser skill was not written by this GRID. Replaces ${skill.status.dir}.`
+                : `Write /grid-browser to ${skill.status.dir}, so a Claude session can come and collect these.`
+            }
+          >
+            <IconPlus size={10} />{' '}
+            {skill.busy
+              ? 'writing…'
+              : skill.status.installed
+                ? 'update the skill'
+                : 'add the skill'}
+          </button>
+        )}
 
         <span className="pane-header__gap" />
 
@@ -205,8 +238,9 @@ export function CommentsPanel({
       <div className="netlog__list">
         {comments.length === 0 && (
           <p className="netlog__empty">
-            Nothing yet. Point at something in the page and say what is wrong with it, or write a
-            note about the page as a whole. They gather here until a Claude session asks for them.
+            Nothing yet. Press <strong>Select Element</strong>, click something in the page and say
+            what is wrong with it — or write a note about the page as a whole. They gather here
+            until a Claude session asks for them.
           </p>
         )}
 
@@ -251,6 +285,49 @@ export function CommentsPanel({
       </div>
     </div>
   )
+}
+
+/**
+ * The `/grid-browser` skill, and the one button that installs it.
+ *
+ * Asked for when the comments open rather than at startup, because this is the
+ * only place the answer is worth anything — and because "is there a file in
+ * your home directory" is not a question to ask on every launch.
+ */
+function useSkill(): { status: SkillStatus | null; busy: boolean; install: () => void } {
+  const [status, setStatus] = useState<SkillStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const alive = useRef(true)
+
+  useEffect(() => {
+    alive.current = true
+    void window.grid.skill.status().then((s) => {
+      if (alive.current) setStatus(s)
+    })
+    return () => {
+      alive.current = false
+    }
+  }, [])
+
+  const install = useCallback(() => {
+    setBusy(true)
+    void window.grid.skill
+      .install()
+      .then(async (result) => {
+        if (!result.ok) {
+          actions.toast(`Could not write the skill — ${result.error}`, 'error')
+          return
+        }
+        const next = await window.grid.skill.status()
+        if (alive.current) setStatus(next)
+        actions.toast('Skill installed — run /grid-browser in a Claude session')
+      })
+      .finally(() => {
+        if (alive.current) setBusy(false)
+      })
+  }, [])
+
+  return { status, busy, install }
 }
 
 /**

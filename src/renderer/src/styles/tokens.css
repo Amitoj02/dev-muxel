@@ -66,6 +66,7 @@
 
   /* --- metrics ------------------------------------------------------- */
   --titlebar-h: 38px;
+  --tabstrip-h: 30px;
   --pane-header-h: 30px;
   --statusbar-h: 24px;
   --grid-rule: 24px;
@@ -148,12 +149,23 @@
   }
 }
 
+/*
+ * A sweep across an element, not of it.
+ *
+ * `transform` is the obvious way to move a highlight along and the wrong one
+ * here: the only thing wearing this is the URL bar, so animating its transform
+ * slid the whole field back and forth across the toolbar. The background is
+ * what should be moving, and only along x, so whatever wears this keeps its
+ * own vertical placement. Percentages there are relative to the free space
+ * (container minus image), so with the 40%-wide gradient this is used with,
+ * -70% and 170% sit just off each edge.
+ */
 @keyframes grid-sweep {
   0% {
-    transform: translateX(-100%);
+    background-position-x: -70%;
   }
   100% {
-    transform: translateX(100%);
+    background-position-x: 170%;
   }
 }
 

@@ -289,23 +289,13 @@ export class TerminalSession {
     this.scheduleFit()
   }
 
-  detach(): void {
-    this.observer?.disconnect()
-    this.observer = null
-    this.host = null
-  }
-
   /**
-   * The pane was closed, but inside the reopen window — so nothing is torn
-   * down. The shell keeps running and keeps writing into this buffer; the
-   * element simply stops being on screen. Whoever adopts the session next
-   * gets the scrollback, the process and the shell's own state back intact.
+   * Remounted: a new pane component, the same terminal.
+   *
+   * There is no `park` any more. A pane closed inside the reopen window keeps
+   * its component and its host element — it is only hidden — so there is
+   * nothing to detach and nothing to put back. `dispose` is the only way out.
    */
-  park(): void {
-    this.detach()
-  }
-
-  /** Reopened, or remounted: a new pane component, the same terminal. */
   adopt(cb: SessionCallbacks): void {
     this.cb = cb
   }

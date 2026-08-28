@@ -7,12 +7,14 @@
 
 import { useEffect } from 'react'
 import { GridView } from './components/GridView'
+import { TabStrip } from './components/TabStrip'
 import { TitleBar } from './components/TitleBar'
 import { RepositoriesPanel } from './components/RepositoriesPanel'
 import { NotesPanel } from './components/NotesPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ConfirmClose } from './components/ConfirmClose'
+import { ConfirmCloseTab } from './components/ConfirmCloseTab'
 import { SendToClaude } from './components/SendToClaude'
 import { Toast } from './components/Toast'
 import { useShortcuts } from './lib/useShortcuts'
@@ -47,6 +49,7 @@ export function App(): React.JSX.Element {
   return (
     <div className="app" data-glow={String(app.settings.glowStrength ?? 26)}>
       <TitleBar />
+      <TabStrip />
       <GridView />
 
       {app.overlay.kind === 'repositories' && <RepositoriesPanel />}
@@ -54,6 +57,7 @@ export function App(): React.JSX.Element {
       {app.overlay.kind === 'settings' && <SettingsPanel />}
       {app.overlay.kind === 'shortcuts' && <ShortcutsSheet />}
       {app.overlay.kind === 'confirm-close' && <ConfirmClose paneId={app.overlay.paneId} />}
+      {app.overlay.kind === 'confirm-close-tab' && <ConfirmCloseTab tabId={app.overlay.tabId} />}
       {app.overlay.kind === 'send-to-claude' && (
         <SendToClaude paneId={app.overlay.paneId} uids={app.overlay.uids} />
       )}

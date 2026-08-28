@@ -23,6 +23,8 @@ handy on machines where Smart App Control blocks the packaged exe.
 ```
 src/shared/     types, the IPC channel list, the pure layout engine, and the
                 pure half of the browser pane (browser.ts, claude.ts)
+resources/      the /grid-browser skill, shipped with the app and inlined into
+                the main bundle with `?raw`
 src/main/       ptys, git, the filesystem, the window, menu accelerators, and
                 the browser guests' debugger and hardening (main/browser/)
 src/preload/    the contextBridge — a fixed, typed list of verbs
@@ -34,7 +36,7 @@ The renderer owns the application state and pushes the whole blob at main to be
 persisted, debounced. Main owns everything privileged. Nothing crosses that
 line, which is why the renderer runs sandboxed with `contextIsolation`.
 
-Six decisions worth knowing before you change things:
+Seven decisions worth knowing before you change things:
 
 **Panes are absolutely positioned from a split tree, not nested flexbox.** The
 rendered pane list stays flat and keyed by pane id, so reshaping the grid never
@@ -43,6 +45,25 @@ window with its scrollback intact. Zooming is then just a different rect for the
 same element, which is why the fullscreen transition is a plain CSS transition.
 The engine is `src/shared/layout.ts`; it is pure and covered by `npm run
 check:layout`.
+
+**A tab is a whole grid, and its panes are hidden rather than unmounted.**
+`session.panes` is every pane in the app; a tab is only a tree naming some of
+them, which is why moving a pane between tabs is a change of address and not a
+rebuild. `GridView` renders *every* pane, measuring each tab's tree against the
+same box, and marks the ones whose tab is off screen `data-hidden` — so a shell
+keeps running, an xterm keeps its scrollback, a page stays loaded, and
+switching tabs resizes nothing. The CSS is `visibility: hidden`, never
+`display: none`: the latter takes the element's layout box away, and a
+`<webview>` whose box goes away loses its guest.
+
+The store carries the tab you are looking at in the *top-level* `layout` /
+`focusedPaneId` / `zoomedPaneId`, and the copy in `tabs` is stale until
+`tabsSnapshot` reconciles them. That is deliberate: every existing reader of
+`state.layout` goes on reading the grid on screen without knowing tabs exist,
+and one file has to care. Anything reading or rewriting across tabs goes
+through `tabsSnapshot`. One pane belongs to exactly one tab and nothing in the
+state file enforces it, so `claimLeaves` in the layout engine does — it is pure
+and covered by `npm run check:layout`.
 
 **Shortcuts are Electron menu accelerators, not a `keydown` listener.** xterm
 calls `stopPropagation()` on every key it handles, so a window listener sees an
@@ -53,13 +74,29 @@ change in the grid, and `src/renderer/src/lib/chords.ts` is the shared list of
 what GRID claims — every chord there has to be refused by xterm too, or it never
 reaches the window.
 
-**Closing a pane parks it rather than killing it.** For five seconds the pty
-keeps running and the xterm buffer stays in memory, so `Ctrl+Shift+T` adopts the
-same session back into a new pane component instead of spawning a lookalike.
-`actions.closePane` records it, `TerminalPane`'s cleanup parks instead of
-killing, and `lib/useRecentlyClosed.ts` is the one place that reaps an expired
-entry. If you touch the pane lifecycle, keep that split: the store holds the
-data, the hook holds the axe.
+**Closing something parks it rather than killing it.** For five seconds a
+closed pane — or every pane of a closed *grid* — comes out of its tree but
+stays in `session.panes`, which by the rule above means it stays **mounted and
+hidden**. Nothing is torn down: the pty keeps running, xterm keeps its
+scrollback, and a browser pane keeps its page, its scroll position, its network
+log and any comments written on it. `Ctrl+Shift+T` then puts the same thing
+back rather than building a lookalike, and for a grid it puts the whole tab
+back in its old place on the strip.
+
+That is why there is no `park()` on `TerminalSession` any more and no special
+case in `TerminalPane`'s cleanup: a parked pane's component never unmounts, so
+there is nothing to detach and nothing to re-adopt. `actions.closePane` /
+`actions.closeTab` record the entry, `lib/useRecentlyClosed.ts` is the one
+place that calls time, and `actions.dropExpired` ends it by dropping the panes
+out of the list — which unmounts them, and each kind's own cleanup does its own
+killing, the same path as any other close. Keep that split if you touch the
+lifecycle: the store holds the data, the hook holds the clock, and a pane
+component is the only thing that ever kills a pane.
+
+A parked pane is in no tab, so anything asking "what panes are there" for a
+reason other than drawing them has to skip it — `isParked` is that test, and
+the taskbar count, the browser bridge and the send-to-Claude target list all
+use it.
 
 **Git state comes from one `git status --porcelain=v2 --branch` call per repo,
 always with `--no-optional-locks`.** That flag is load-bearing, not an
@@ -140,6 +177,14 @@ until the shell itself exits. The file path is always available from the same
 dialog, and it is what everything unproven falls back to.
 
 `npm run check:browser` asserts the sanitising and the one-line form.
+
+The far end of that bridge — the skill itself — ships in `resources/skills/`
+and is written into `~/.claude/skills/` by a button in the comments bar. Both
+halves are one protocol, so they live in one repository and the skill stamps
+the version that wrote it; a copy without that stamp was written by hand and
+counts as out of date. `src/main/browser/skill.ts` imports the two files with
+`?raw`, which inlines them at build time — so they stay real files a human can
+read and copy, and there is nothing to unpack out of the asar at runtime.
 
 **Pty output is coalesced in main and flow-controlled.** A build emits thousands
 of tiny writes (measured: 1.17 MB arriving as 7,497 separate events); they are

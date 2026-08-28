@@ -11,11 +11,25 @@
  *   2. Zooming is then just a different rect for the same element, so the
  *      "animate to fullscreen" transition is a plain CSS transition on
  *      left/top/width/height instead of a portal and a clone.
+ *
+ * Tabs fall out of the same property, and are the reason it is worth this
+ * much. **Every pane in the app is rendered here, including the ones in tabs
+ * you are not looking at** — they are hidden, not unmounted, so a shell keeps
+ * running, an xterm keeps its scrollback and a browser pane keeps its page
+ * while its grid is off screen. Each tab's tree is measured against the same
+ * box as the one on screen, so a hidden pane already has the rect it will be
+ * shown at and switching tabs resizes nothing.
+ *
+ * The reopen window rides on the same mechanism. A pane you just closed, and
+ * every pane of a grid you just closed, is in no tab at all but is still in
+ * the list — so it is still drawn here, hidden, at the rect it had when it
+ * went. That is what makes Ctrl+Shift+T give you back the same shell and the
+ * same loaded page rather than a fresh one.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DockSide } from '../../../shared/types'
-import { dockZone, measure, type Rect } from '../../../shared/layout'
+import { collectPaneIds, dockZone, measure, type Rect } from '../../../shared/layout'
 import { actions, paneLabel, useApp } from '../state/hooks'
 import { PaneShell } from './PaneShell'
 import { EmptyState } from './EmptyState'
@@ -42,10 +56,57 @@ export function GridView(): React.JSX.Element {
   }, [])
 
   const gutter = app.settings.gutter ?? 6
+  // The grid on screen. Splitters and drop targets only ever come from this
+  // one — you cannot reshape a tab you are not looking at.
   const { panes: rects, gutters } = useMemo(
     () => measure(app.layout, box, gutter),
     [app.layout, box, gutter]
   )
+
+  const mine = useMemo(() => new Set(collectPaneIds(app.layout)), [app.layout])
+
+  /**
+   * Rects for the panes in every *other* tab.
+   *
+   * Measured against the same box rather than remembered from when their tab
+   * was last on screen: a window resized while a tab is in the background
+   * would otherwise show it at the old size and reflow every pty in it on the
+   * way in, which is exactly what tabs are meant to avoid.
+   *
+   * Kept out of the memo above deliberately — that one recomputes on every
+   * frame of a splitter drag, and a background grid cannot have changed shape
+   * while you were dragging one in front of it.
+   */
+  const elsewhere = useMemo(() => {
+    const out = new Map<string, Rect>()
+    for (const tab of app.tabs) {
+      if (tab.id === app.activeTabId) continue
+      for (const [id, rect] of measure(tab.layout, box, gutter).panes) out.set(id, rect)
+    }
+    return out
+  }, [app.tabs, app.activeTabId, box, gutter])
+
+  /**
+   * Rects for the panes being held for a reopen.
+   *
+   * Measured off the tree each one was closed out of, so a parked pane keeps
+   * exactly the box it had — it is coming straight back, and resizing a
+   * terminal on the way out and again on the way in would reflow a scrollback
+   * nobody asked to have reflowed.
+   */
+  const parked = useMemo(() => {
+    const out = new Map<string, Rect>()
+    for (const entry of app.recentlyClosed) {
+      if (!entry.parked) continue
+      if (entry.kind === 'tab') {
+        for (const [id, rect] of measure(entry.tab.layout, box, gutter).panes) out.set(id, rect)
+      } else {
+        const rect = measure(entry.layout, box, gutter).panes.get(entry.pane.id)
+        if (rect) out.set(entry.pane.id, rect)
+      }
+    }
+    return out
+  }, [app.recentlyClosed, box, gutter])
 
   const zoomRect = useMemo((): Rect | null => {
     if (!app.zoomedPaneId) return null
@@ -66,14 +127,6 @@ export function GridView(): React.JSX.Element {
   const drag = useSplitterDrag(ref, gutter)
   const dnd = usePaneDrag(ref, rects)
 
-  if (!app.layout || app.panes.length === 0) {
-    return (
-      <div className="grid" data-rules={app.settings.showGridLines} ref={ref}>
-        <EmptyState />
-      </div>
-    )
-  }
-
   return (
     <div
       className="grid"
@@ -90,20 +143,27 @@ export function GridView(): React.JSX.Element {
       onPointerMove={dnd.onPointerMove}
       onPointerUp={dnd.onPointerUp}
     >
+      {/* An empty grid still renders every other tab's panes behind it, which
+          is why this is not an early return: unmounting them to show a
+          headline would kill the shells the other tabs are holding. */}
+      {mine.size === 0 && <EmptyState />}
+
       {app.zoomedPaneId && (
         <div className="scrim" onPointerDown={() => actions.closeZoom()} />
       )}
 
       {app.panes.map((pane) => {
-        const base = rects.get(pane.id)
+        const here = mine.has(pane.id)
+        const base = here ? rects.get(pane.id) : (elsewhere.get(pane.id) ?? parked.get(pane.id))
         if (!base) return null
-        const zoomed = app.zoomedPaneId === pane.id
+        const zoomed = here && app.zoomedPaneId === pane.id
         return (
           <PaneShell
             key={pane.id}
             pane={pane}
             rect={zoomed && zoomRect ? zoomRect : base}
             zoomed={zoomed}
+            hidden={!here}
             animating={animating}
             onDragStart={dnd.begin}
           />

@@ -10,7 +10,7 @@
  */
 
 import type { PersistedState } from '../../../shared/types'
-import { actions, attentionCount, getState, subscribe } from './store'
+import { actions, attentionCount, getState, isParked, subscribe, tabOfPane } from './store'
 import { hydrate, toPersisted } from './store'
 import { getSession } from '../terminal/session'
 import {
@@ -77,6 +77,12 @@ function wireEvents(): void {
   // on thinking whichever pane you came from is still the focused one — and
   // Ctrl+Alt+W would close that one.
   window.grid.on.browserFocus((paneId) => {
+    // Only for a guest that is actually on screen. A pane in a tab you are not
+    // looking at is hidden and cannot have been clicked, so anything claiming
+    // focus from one is the page doing it to itself — and following that would
+    // yank the user into another grid while they were typing.
+    const s = getState()
+    if (tabOfPane(s, paneId) !== s.activeTabId) return
     actions.focusPane(paneId)
   })
 
@@ -84,11 +90,16 @@ function wireEvents(): void {
   // one you were last looking at is what it meant.
   window.grid.on.browserArmPicker(() => {
     const state = getState()
+    // Never one being held for a reopen: it is off the grid and about to be
+    // gone, and arming a picker in a page nobody can see is a session waiting
+    // on comments that can never arrive.
+    const usable = (paneId: string): boolean => !isParked(state, paneId)
     const target =
       (state.lastBrowserPaneId &&
         state.panes.some((p) => p.id === state.lastBrowserPaneId) &&
+        usable(state.lastBrowserPaneId) &&
         state.lastBrowserPaneId) ||
-      state.panes.find((p) => p.kind === 'browser')?.id
+      state.panes.find((p) => p.kind === 'browser' && usable(p.id))?.id
     if (!target) return
     actions.focusPane(target)
     if (!armPicker(target)) actions.toast('That browser pane is not ready yet', 'error')
@@ -137,7 +148,10 @@ function wireAttention(): void {
 function wireBrowserBridge(): void {
   let last = false
   subscribe(() => {
-    const hasBrowser = getState().panes.some((p) => p.kind === 'browser')
+    const s = getState()
+    // `isParked` returns straight away while nothing is closed, which is
+    // almost always — this runs on every store update.
+    const hasBrowser = s.panes.some((p) => p.kind === 'browser' && !isParked(s, p.id))
     if (hasBrowser === last) return
     last = hasBrowser
     window.grid.browser.bridgeSync({ hasBrowser })
