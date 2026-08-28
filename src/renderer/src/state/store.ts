@@ -11,6 +11,7 @@
  */
 
 import type {
+  BrowserPane,
   DockSide,
   GitState,
   LayoutNode,
@@ -22,6 +23,7 @@ import type {
   ShellProfile,
   TerminalPane
 } from '../../../shared/types'
+import { hostLabel, normaliseUrl } from '../../../shared/browser'
 import {
   anchorFor,
   autoAppend,
@@ -64,6 +66,16 @@ export type PaneRuntime = {
   attentionSince: number | null
   /** Last title the shell reported via OSC 0/2. */
   title: string | null
+  /**
+   * The command GRID typed into this shell *and pressed Enter on*, if any.
+   *
+   * The distinction matters: a repository's "command on open" is typed into
+   * every terminal whether or not "press Enter for me" is set, so the pane's
+   * configuration says nothing about what is actually running. This does — and
+   * it is what decides whether a captured request may be pasted into the pane
+   * as one message, or has to go to a file because the pane is a bare shell.
+   */
+  ranStartup: string | null
 }
 
 /** A pane closed recently enough to be worth keeping around. */
@@ -87,6 +99,8 @@ export type Overlay =
   | { kind: 'settings' }
   | { kind: 'shortcuts' }
   | { kind: 'confirm-close'; paneId: string }
+  /** Requests picked out of a browser pane's log, on their way to a CLI. */
+  | { kind: 'send-to-claude'; paneId: string; uids: string[] }
 
 export type AppState = {
   ready: boolean
@@ -135,7 +149,8 @@ const emptyRuntime: PaneRuntime = {
   attention: 'none',
   busy: false,
   attentionSince: null,
-  title: null
+  title: null,
+  ranStartup: null
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +272,11 @@ export function paneLabel(s: AppState, pane: Pane): string {
   if (pane.kind === 'note') {
     return noteById(s, pane.noteId)?.title ?? 'note'
   }
+  if (pane.kind === 'browser') {
+    // The page's own title first: it changes as you navigate, which is what
+    // makes one browser pane tell itself apart from the next.
+    return pane.label || pane.title || hostLabel(pane.url) || 'browser'
+  }
   if (pane.label) return pane.label
   const repo = repoById(s, pane.repoId)
   if (repo) return repo.name
@@ -354,7 +374,17 @@ export const actions = {
 
   // --- panes -------------------------------------------------------------
 
-  addTerminal(opts: { repoId?: string | null; cwd?: string; shellId?: string } = {}): string | null {
+  addTerminal(
+    opts: {
+      repoId?: string | null
+      cwd?: string
+      shellId?: string
+      /** Overrides the repo's command on open — and then runs it. */
+      startupCommand?: string
+      runStartup?: boolean
+      label?: string
+    } = {}
+  ): string | null {
     const repo = repoById(state, opts.repoId ?? null)
     const cwd = opts.cwd ?? repo?.path
     if (!cwd) return null
@@ -366,7 +396,9 @@ export const actions = {
       repoId: repo?.id ?? null,
       cwd,
       shellId,
-      startupCommand: repo?.startupCommand
+      startupCommand: opts.startupCommand ?? repo?.startupCommand,
+      runStartup: opts.startupCommand ? (opts.runStartup ?? true) : undefined,
+      label: opts.label
     }
 
     set((s) => ({
@@ -390,6 +422,12 @@ export const actions = {
       actions.addTerminal({ repoId: focused.repoId, cwd: focused.cwd, shellId: focused.shellId })
       return
     }
+    // A browser pane knows its repository too, and "the project I am looking
+    // at" is a better guess than "the first one I ever declared".
+    if (focused && focused.kind === 'browser' && focused.repoId) {
+      actions.addTerminal({ repoId: focused.repoId })
+      return
+    }
     const repo = state.repos[0]
     if (repo) {
       actions.addTerminal({ repoId: repo.id })
@@ -398,19 +436,33 @@ export const actions = {
     actions.showOverlay({ kind: 'repositories' })
   },
 
-  /** Split an existing pane, opening a second terminal on the same folder. */
+  /**
+   * Split an existing pane, opening a second one of the same kind: another
+   * terminal on the same folder, or the same page again — which is how you end
+   * up with one page at desktop width next to itself at phone width.
+   */
   splitFrom(paneId: string, side: DockSide = 'right'): string | null {
     const source = paneById(state, paneId)
-    if (!source || source.kind !== 'terminal') return null
+    if (!source || source.kind === 'note') return null
 
-    const pane: TerminalPane = {
-      id: newId('pane'),
-      kind: 'terminal',
-      repoId: source.repoId,
-      cwd: source.cwd,
-      shellId: source.shellId,
-      startupCommand: undefined
-    }
+    const pane: Pane =
+      source.kind === 'terminal'
+        ? {
+            id: newId('pane'),
+            kind: 'terminal',
+            repoId: source.repoId,
+            cwd: source.cwd,
+            shellId: source.shellId,
+            startupCommand: undefined
+          }
+        : {
+            id: newId('pane'),
+            kind: 'browser',
+            repoId: source.repoId,
+            url: source.url,
+            viewport: source.viewport,
+            title: source.title
+          }
 
     set((s) => ({
       panes: [...s.panes, pane],
@@ -458,6 +510,62 @@ export const actions = {
       // Otherwise the new pane is focused but hidden behind the zoom scrim.
       zoomedPaneId: null
     }))
+  },
+
+  // --- browser -----------------------------------------------------------
+
+  /**
+   * A page in the grid. Unlike a terminal it needs no repository — you can
+   * open one before you have declared anything — but it takes one when there
+   * is one, because that is how a captured request finds its way to the Claude
+   * session running on the project that served it.
+   */
+  addBrowser(opts: { repoId?: string | null; url?: string } = {}): string {
+    const repo = repoById(state, opts.repoId ?? null)
+    const wanted = opts.url ?? repo?.devUrl ?? ''
+    const parsed = wanted ? normaliseUrl(wanted) : null
+
+    const pane: BrowserPane = {
+      id: newId('pane'),
+      kind: 'browser',
+      repoId: repo?.id ?? null,
+      url: parsed?.ok ? parsed.url : 'about:blank',
+      viewport: 'desktop'
+    }
+
+    set((s) => ({
+      panes: [...s.panes, pane],
+      layout: autoAppend(s.layout, pane.id, s.gridBox, s.settings.gutter),
+      focusedPaneId: pane.id,
+      runtime: { ...s.runtime, [pane.id]: { ...emptyRuntime } },
+      zoomedPaneId: null
+    }))
+    return pane.id
+  },
+
+  /** `＋ Browser` with nothing chosen: inherit the focused pane's repository. */
+  addBrowserSmart(): void {
+    const focused = paneById(state, state.focusedPaneId)
+    const repoId =
+      focused && focused.kind !== 'note' ? focused.repoId : (state.repos[0]?.id ?? null)
+    actions.addBrowser({ repoId })
+  },
+
+  /** Url, title and viewport all arrive from the guest as it navigates. */
+  patchBrowser(paneId: string, patch: Partial<Omit<BrowserPane, 'id' | 'kind'>>): void {
+    set((s) => {
+      const pane = s.panes.find((p) => p.id === paneId)
+      if (!pane || pane.kind !== 'browser') return {}
+      let same = true
+      for (const key of Object.keys(patch) as Array<keyof typeof patch>) {
+        if (pane[key] !== patch[key]) {
+          same = false
+          break
+        }
+      }
+      if (same) return {}
+      return { panes: s.panes.map((p) => (p.id === paneId ? { ...p, ...patch } : p)) }
+    })
   },
 
   /**
@@ -641,8 +749,12 @@ export const actions = {
   removeRepo(id: string): void {
     set((s) => ({
       repos: s.repos.filter((r) => r.id !== id),
-      // Panes stay open on their folder; they just stop being tied to a repo.
-      panes: s.panes.map((p) => (p.kind === 'terminal' && p.repoId === id ? { ...p, repoId: null } : p))
+      // Panes stay open on their folder or page; they just stop being tied to
+      // a repo. Browser panes carry a repoId too, and a dangling one would
+      // send their network captures to a Claude session in the wrong project.
+      panes: s.panes.map((p) =>
+        p.kind !== 'note' && p.repoId === id ? { ...p, repoId: null } : p
+      )
     }))
   },
 

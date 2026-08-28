@@ -13,8 +13,10 @@
 
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { VIEWPORT_ORDER, isWebUrl } from '../../shared/browser'
+import { CLAUDE_EFFORTS, isSafeFlagValue } from '../../shared/claude'
 import { sanitiseLayout } from '../../shared/layout'
-import type { PersistedState, Settings, WindowBounds } from '../../shared/types'
+import type { BrowserPane, PersistedState, Settings, WindowBounds } from '../../shared/types'
 import { STATE_VERSION, defaultSettings, defaultState } from './defaults'
 
 const WRITE_DEBOUNCE_MS = 400
@@ -207,8 +209,32 @@ function migrateSettings(input: unknown): Settings {
   bool('showGridLines')
   str('cursorStyle', ['block', 'underline', 'bar'])
   str('renderer', ['dom', 'webgl'])
+  num('browserNetLimit', 20, 5000)
+  bool('browserCaptureBodies')
+  str('claudeEffort', CLAUDE_EFFORTS)
+  // The model ends up on a command line GRID types into a shell, so it is
+  // checked against the shape of a model name rather than merely its length.
+  // This file is plain JSON that a user may well open and edit.
+  if (typeof raw.claudeModel === 'string' && isSafeFlagValue(raw.claudeModel)) {
+    out.claudeModel = raw.claudeModel
+  }
 
   return out
+}
+
+/**
+ * The two fields of a browser pane that are handed straight to a live web
+ * view, checked on the way in.
+ *
+ * This file is plain JSON a user can edit, and neither field is validated
+ * anywhere else on the restore path: the URL goes to `loadURL`, which does not
+ * fire the navigation guards, and an unrecognised viewport would be looked up
+ * in a table that does not have it.
+ */
+function sanitiseBrowserPane(pane: BrowserPane): BrowserPane {
+  const viewport = VIEWPORT_ORDER.includes(pane.viewport) ? pane.viewport : 'desktop'
+  const url = typeof pane.url === 'string' && isWebUrl(pane.url) ? pane.url : 'about:blank'
+  return { ...pane, url, viewport }
 }
 
 /**
@@ -240,9 +266,14 @@ function migrate(input: PersistedState | null): PersistedState {
   const session = base.session
   if (input.session && typeof input.session === 'object') {
     if (Array.isArray(input.session.panes)) {
-      session.panes = input.session.panes.filter(
-        (p) => p && typeof p.id === 'string' && (p.kind === 'terminal' || p.kind === 'note')
-      )
+      session.panes = input.session.panes
+        .filter(
+          (p) =>
+            p &&
+            typeof p.id === 'string' &&
+            (p.kind === 'terminal' || p.kind === 'note' || p.kind === 'browser')
+        )
+        .map((p) => (p.kind === 'browser' ? sanitiseBrowserPane(p) : p))
     }
     // The layout is the one deeply nested thing in this file, and it is the one
     // thing the renderer cannot survive being malformed: a bad node makes

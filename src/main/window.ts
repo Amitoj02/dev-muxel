@@ -14,6 +14,7 @@
 import { BrowserWindow, screen, shell, type Rectangle } from 'electron'
 import path from 'node:path'
 import type { WindowBounds } from '../shared/types'
+import { sanitiseGuestPreferences } from './browser/guest'
 
 const MIN_WIDTH = 760
 const MIN_HEIGHT = 480
@@ -95,8 +96,21 @@ export function createWindow(deps: WindowDeps): BrowserWindow {
       backgroundThrottling: false,
       // A terminal has nothing to spell-check, and the dictionary is not free.
       spellcheck: false,
-      webgl: true
+      webgl: true,
+      // Browser panes. WebContentsView was the alternative and was rejected:
+      // it is composited above the page, so it would sit on top of the zoom
+      // scrim, the drop indicator and every dialog, and its bounds would have
+      // to be mirrored from the layout engine on every splitter drag. A
+      // <webview> is an element, so it obeys the same absolute rect, the same
+      // stacking order and the same CSS transition as every other pane.
+      webviewTag: true
     }
+  })
+
+  // A guest's preferences arrive as an HTML attribute, which is not a security
+  // boundary — so they are overwritten here, where the renderer cannot reach.
+  win.webContents.on('will-attach-webview', (_event, webPreferences) => {
+    sanitiseGuestPreferences(webPreferences)
   })
 
   // Nothing in GRID should ever open a second window or navigate away.

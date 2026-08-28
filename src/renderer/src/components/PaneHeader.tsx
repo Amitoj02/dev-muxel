@@ -8,9 +8,10 @@
  */
 
 import { useRef } from 'react'
-import type { GitState, Pane } from '../../../shared/types'
+import type { BrowserPane as BrowserPaneModel, GitState, Pane } from '../../../shared/types'
+import { hostLabel, viewportOf } from '../../../shared/browser'
 import type { PaneRuntime } from '../state/hooks'
-import { IconBranch, IconClose, IconPlus, IconUnzoom, IconZoom } from './Icons'
+import { IconBranch, IconClose, IconGlobe, IconPlus, IconUnzoom, IconZoom } from './Icons'
 
 export type PaneHeaderProps = {
   pane: Pane
@@ -31,6 +32,7 @@ export type PaneHeaderProps = {
 /** Spine colour: red when the pane wants you, green when the tree is clean. */
 function spineState(pane: Pane, git: GitState | null, runtime: PaneRuntime): string {
   if (pane.kind === 'note') return 'note'
+  if (pane.kind === 'browser') return 'browser'
   if (runtime.attention !== 'none') return 'alert'
   if (git?.isRepo && git.dirty === 0 && git.conflicted === 0) return 'clean'
   return 'idle'
@@ -72,15 +74,13 @@ export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
       onDoubleClick={props.onZoom}
     >
       <span className="pane-header__spine" data-state={spineState(pane, git, runtime)} />
-      <span className="pane-header__name" title={pane.kind === 'terminal' ? pane.cwd : undefined}>
+      <span className="pane-header__name" title={paneTitleAttr(pane)}>
         {props.label}
       </span>
 
-      {pane.kind === 'terminal' ? (
-        <GitChips git={git} />
-      ) : (
-        <span className="note-status">{props.noteStatus}</span>
-      )}
+      {pane.kind === 'terminal' && <GitChips git={git} />}
+      {pane.kind === 'note' && <span className="note-status">{props.noteStatus}</span>}
+      {pane.kind === 'browser' && <BrowserChips pane={pane} />}
 
       <span className="pane-header__gap" />
 
@@ -104,7 +104,11 @@ export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
         <button
           className="pane-btn pane-btn--split"
           onClick={props.onSplit}
-          title="Another terminal on this folder"
+          title={
+            pane.kind === 'browser'
+              ? 'The same page again, beside itself'
+              : 'Another terminal on this folder'
+          }
         >
           <IconPlus />
         </button>
@@ -123,6 +127,35 @@ export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
       </button>
     </div>
   )
+}
+
+/**
+ * A browser pane's readout: where it is, and which device it is pretending to
+ * be when that is not the obvious one.
+ *
+ * The preset goes through `viewportOf` rather than indexing the table. The
+ * state file is plain JSON a user can edit, and an unrecognised viewport in it
+ * would otherwise throw inside render — which, with no error boundary above
+ * this, is a blank window on every launch.
+ */
+function BrowserChips({ pane }: { pane: BrowserPaneModel }): React.JSX.Element {
+  const preset = viewportOf(pane.viewport)
+  return (
+    <>
+      <span className="chip chip--host" title={pane.url}>
+        <IconGlobe size={10} />
+        {hostLabel(pane.url) || 'nothing open'}
+      </span>
+      {preset.id !== 'desktop' && <span className="chip chip--device">{preset.label}</span>}
+    </>
+  )
+}
+
+/** What hovering the pane's name tells you: where it is, in its own terms. */
+function paneTitleAttr(pane: Pane): string | undefined {
+  if (pane.kind === 'terminal') return pane.cwd
+  if (pane.kind === 'browser') return pane.url
+  return undefined
 }
 
 /**

@@ -10,7 +10,10 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from '
 import path from 'node:path'
 import os from 'node:os'
 import { CH, EV } from '../shared/ipc'
-import type { GitState, PersistedState, PtySpawnResult, Settings } from '../shared/types'
+import type { GitState, PersistedState, PtySpawnResult, Settings, ViewportId } from '../shared/types'
+import { BrowserCapture, type CaptureStatus } from './browser/network'
+import { CaptureStash } from './browser/stash'
+import { hardenGuest, prepareGuestSession } from './browser/guest'
 import { buildMenu } from './menu'
 import { GitWatcher } from './git/watcher'
 import { probeRepo, scanForRepos } from './git/status'
@@ -33,6 +36,7 @@ if (!app.requestSingleInstanceLock()) {
 
 let win: BrowserWindow | null = null
 let store: Store
+let stash: CaptureStash
 let gitWatcher: GitWatcher | null = null
 let quitting = false
 
@@ -52,6 +56,20 @@ const pty = new PtyManager({
   onExit: (paneId, exitCode, solicited) => {
     win?.webContents.send(EV.ptyExit, paneId, exitCode, solicited)
   }
+})
+
+const capture = new BrowserCapture({
+  onEntries: (paneId, entries) => {
+    win?.webContents.send(EV.browserNet, paneId, entries)
+  },
+  onStatus: (paneId, status: CaptureStatus) => {
+    win?.webContents.send(EV.browserCapture, paneId, status)
+  },
+  onFocus: (paneId) => {
+    win?.webContents.send(EV.browserFocus, paneId)
+  },
+  limit: () => store.get().settings.browserNetLimit,
+  captureBodies: () => store.get().settings.browserCaptureBodies
 })
 
 // ---------------------------------------------------------------------------
@@ -183,6 +201,32 @@ function registerIpc(): void {
 
   ipcMain.handle(CH.shellsList, () => mergeShells(discoverShells(), store.get().shells))
 
+  // --- browser panes -----------------------------------------------------
+  // The renderer owns the <webview> and drives it directly; only the network
+  // debugger and device emulation need to be up here, because both are
+  // privileged and neither is reachable from a sandboxed page.
+
+  ipcMain.handle(CH.browserAttach, (_e, paneId: string, webContentsId: number) =>
+    capture.attach(String(paneId), Number(webContentsId))
+  )
+  ipcMain.handle(CH.browserDetach, (_e, paneId: string) => capture.detach(String(paneId)))
+  ipcMain.handle(
+    CH.browserEmulate,
+    (_e, paneId: string, viewport: ViewportId, userAgent: string) =>
+      capture.emulate(String(paneId), viewport, String(userAgent))
+  )
+  ipcMain.handle(CH.browserEntries, (_e, paneId: string) => ({
+    entries: capture.entries(String(paneId)),
+    attached: capture.isAttached(String(paneId))
+  }))
+  ipcMain.handle(CH.browserBody, (_e, paneId: string, uid: string) =>
+    capture.body(String(paneId), String(uid))
+  )
+  ipcMain.handle(CH.browserClear, (_e, paneId: string) => capture.clear(String(paneId)))
+  ipcMain.handle(CH.browserStash, (_e, text: string, hint: string) =>
+    stash.write(String(text ?? ''), String(hint ?? ''))
+  )
+
   // --- window ------------------------------------------------------------
 
   ipcMain.on(CH.winMinimise, () => win?.minimize())
@@ -255,6 +299,7 @@ app.on('second-instance', () => {
 // cannot fire until the entry module finishes evaluating, so it deadlocks.
 app.whenReady().then(async () => {
   store = new Store(app.getPath('userData'))
+  stash = new CaptureStash(app.getPath('userData'))
   await store.load()
 
   // The renderer loads nothing remote and asks for nothing; deny outright
@@ -262,6 +307,14 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) =>
     callback(false)
   )
+  // Browser panes run in their own session, which needs the same answer — the
+  // handler above is per-session and would not cover a guest.
+  prepareGuestSession()
+
+  // Every guest is locked down as it appears, wherever it came from.
+  app.on('web-contents-created', (_event, contents) => {
+    if (contents.getType() === 'webview') hardenGuest(contents)
+  })
 
   registerIpc()
   rebuildGitWatcher()
@@ -315,6 +368,7 @@ app.on('before-quit', (event) => {
 
   win?.webContents.send(EV.appBeforeQuit)
   pty.killAll(true)
+  capture.disposeAll()
   gitWatcher?.dispose()
   gitWatcher = null
 

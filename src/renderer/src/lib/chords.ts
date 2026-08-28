@@ -21,6 +21,7 @@
 /** Ctrl+Alt chords GRID binds. */
 const CTRL_ALT_KEYS = new Set([
   't', // new terminal
+  'g', // new browser pane
   'n', // new note
   'd', // split right
   's', // split down

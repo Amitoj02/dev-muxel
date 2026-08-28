@@ -46,6 +46,12 @@ export type TerminalPane = {
   shellId: string
   /** Command typed into the shell right after it starts (no trailing newline added unless runOnOpen). */
   startupCommand?: string
+  /**
+   * Press Enter on this pane's own `startupCommand`, overriding the repo's
+   * `runOnOpen`. Set when GRID opened the terminal to run something specific —
+   * a Claude session started from a browser pane's network log, say.
+   */
+  runStartup?: boolean
   /** User-set label; falls back to the repo name or the folder name. */
   label?: string
 }
@@ -56,7 +62,28 @@ export type NotePane = {
   noteId: string
 }
 
-export type Pane = TerminalPane | NotePane
+/** Which device the browser pane lays its page out as. */
+export type ViewportId = 'mobile' | 'tablet' | 'desktop'
+
+export type BrowserPane = {
+  id: string
+  kind: 'browser'
+  /**
+   * Repository this page belongs to. Not used for git — a page has no working
+   * tree — but it is how "send this request to Claude" finds the session
+   * running on the project that served the request.
+   */
+  repoId: string | null
+  /** The page open right now; restored on launch. */
+  url: string
+  viewport: ViewportId
+  /** User-set label; falls back to the page title, then the host. */
+  label?: string
+  /** Last title the page reported, so a restored pane has a name before it loads. */
+  title?: string
+}
+
+export type Pane = TerminalPane | NotePane | BrowserPane
 
 // ---------------------------------------------------------------------------
 // Repositories
@@ -74,6 +101,8 @@ export type Repo = {
   runOnOpen?: boolean
   /** Accent used for this repo's spine when the tree is clean. */
   color?: string
+  /** Where this project runs. A browser pane opened here starts on it. */
+  devUrl?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +210,22 @@ export type Settings = {
    * does not spend one of the renderer process's 16 WebGL contexts per pane.
    */
   renderer: 'dom' | 'webgl'
+  /** Requests kept per browser pane before the oldest are dropped. */
+  browserNetLimit: number
+  /**
+   * Keep response bodies for the requests worth reading (XHR, documents, and
+   * anything that failed). Off means the log still lists every request, it
+   * just has nothing to hand Claude but the headers.
+   */
+  browserCaptureBodies: boolean
+  /**
+   * Model and effort GRID opens a Claude session with when it starts one for
+   * you. Empty means "whatever the CLI defaults to". A session that is already
+   * running always wins over these: it was started with its own flags, and
+   * pasting into it cannot change them.
+   */
+  claudeModel: string
+  claudeEffort: string
 }
 
 // ---------------------------------------------------------------------------

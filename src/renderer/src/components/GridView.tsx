@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DockSide } from '../../../shared/types'
 import { dockZone, measure, type Rect } from '../../../shared/layout'
-import { actions, useApp } from '../state/hooks'
+import { actions, paneLabel, useApp } from '../state/hooks'
 import { PaneShell } from './PaneShell'
 import { EmptyState } from './EmptyState'
 
@@ -78,6 +78,14 @@ export function GridView(): React.JSX.Element {
     <div
       className="grid"
       data-rules={app.settings.showGridLines}
+      /*
+       * A browser pane's guest is a separate WebContents, so pointer events
+       * over it never reach this document — which would strand a pane drag the
+       * moment the cursor crossed a web page, and leave the drop indicator
+       * frozen wherever it last saw the pointer. Marking the drag here lets
+       * CSS take the guests out of hit-testing until it is over.
+       */
+      data-dragging={Boolean(app.dragging) || drag.active !== null}
       ref={ref}
       onPointerMove={dnd.onPointerMove}
       onPointerUp={dnd.onPointerUp}
@@ -190,14 +198,10 @@ function DragGhost({ paneId }: { paneId: string }): React.JSX.Element | null {
 
   const pane = app.panes.find((p) => p.id === paneId)
   if (!pane) return null
-  const label =
-    pane.kind === 'note'
-      ? (app.notes.find((n) => n.id === pane.noteId)?.title ?? 'note')
-      : (pane.label ?? app.repos.find((r) => r.id === pane.repoId)?.name ?? 'terminal')
 
   return (
     <div className="drag-ghost" style={{ left: pos.x, top: pos.y }}>
-      {label}
+      {paneLabel(app, pane)}
     </div>
   )
 }

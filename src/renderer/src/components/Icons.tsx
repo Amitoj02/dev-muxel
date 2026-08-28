@@ -154,6 +154,49 @@ export function IconArrowDown({ size = 10, strokeWidth = 1.4 }: IconProps): Reac
   )
 }
 
+export function IconArrowLeft({ size = 11, strokeWidth = 1.4 }: IconProps): React.JSX.Element {
+  return (
+    <svg {...svgProps(size, strokeWidth)}>
+      <path d="M13 8H3.5" />
+      <path d="m7 4-4 4 4 4" />
+    </svg>
+  )
+}
+
+export function IconArrowRight({ size = 11, strokeWidth = 1.4 }: IconProps): React.JSX.Element {
+  return (
+    <svg {...svgProps(size, strokeWidth)}>
+      <path d="M3 8h9.5" />
+      <path d="m9 4 4 4-4 4" />
+    </svg>
+  )
+}
+
+/** Point at something in the page: the inspector's crosshair-in-a-corner. */
+export function IconPick({ size = 12, strokeWidth = 1.3 }: IconProps): React.JSX.Element {
+  return (
+    <svg {...svgProps(size, strokeWidth)}>
+      <path d="M2.5 6V2.5H6" />
+      <path d="M10 2.5h3.5V6" />
+      <path d="M13.5 10v3.5H10" />
+      <path d="M6 13.5H2.5V10" />
+      <path d="M8 5.5v5" />
+      <path d="M5.5 8h5" />
+    </svg>
+  )
+}
+
+/** The browser pane's mark: a globe drawn with the same 1px stroke. */
+export function IconGlobe({ size = 11, strokeWidth = 1.3 }: IconProps): React.JSX.Element {
+  return (
+    <svg {...svgProps(size, strokeWidth)}>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M2.5 8h11" />
+      <path d="M8 2.5c1.6 1.6 2.4 3.5 2.4 5.5S9.6 11.9 8 13.5C6.4 11.9 5.6 10 5.6 8S6.4 4.1 8 2.5Z" />
+    </svg>
+  )
+}
+
 export function IconSend({ size = 12, strokeWidth = 1.3 }: IconProps): React.JSX.Element {
   return (
     <svg {...svgProps(size, strokeWidth)}>

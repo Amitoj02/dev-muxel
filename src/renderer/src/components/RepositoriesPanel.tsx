@@ -13,6 +13,7 @@ import type { GitState, Repo } from '../../../shared/types'
 import {
   IconClose,
   IconFolder,
+  IconGlobe,
   IconPlus,
   IconRefresh,
   IconScan,
@@ -217,6 +218,16 @@ function RepoRow({
           </button>
           <button
             className="icon-btn"
+            title={repo.devUrl ? `Open a browser on ${repo.devUrl}` : 'Open a browser pane here'}
+            onClick={() => {
+              actions.addBrowser({ repoId: repo.id })
+              actions.closeOverlay()
+            }}
+          >
+            <IconGlobe size={12} />
+          </button>
+          <button
+            className="icon-btn"
             title="Open in VS Code"
             onClick={() => void window.grid.open.editor(repo.path)}
           >
@@ -339,6 +350,19 @@ function RepoRow({
               onChange={(e) => actions.updateRepo(repo.id, { runOnOpen: e.target.checked })}
             />
             Press Enter for me — run it rather than just typing it
+          </label>
+
+          <label className="field" style={{ gridColumn: '1 / -1' }}>
+            <span className="field__label">Where it runs</span>
+            <input
+              className="input"
+              placeholder="localhost:3000"
+              value={repo.devUrl ?? ''}
+              onChange={(e) => actions.updateRepo(repo.id, { devUrl: e.target.value || undefined })}
+            />
+            <span className="field__hint">
+              A browser pane opened on this repository starts here.
+            </span>
           </label>
         </div>
       )}

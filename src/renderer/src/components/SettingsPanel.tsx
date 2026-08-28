@@ -7,6 +7,7 @@
  */
 
 import type { Settings } from '../../../shared/types'
+import { CLAUDE_EFFORTS, CLAUDE_MODELS } from '../../../shared/claude'
 import { IconClose } from './Icons'
 import { Overlay } from './Overlay'
 import { actions, useApp } from '../state/hooks'
@@ -259,6 +260,70 @@ export function SettingsPanel(): React.JSX.Element {
               GRID also re-reads a repository the moment its .git directory changes, so these
               only matter for changes made outside git itself.
             </p>
+          </div>
+
+          <div className="settings-section">Browser</div>
+          <div className="settings-grid">
+            <label className="field">
+              <span className="field__label">Requests kept per pane</span>
+              <input
+                className="input"
+                type="number"
+                min={20}
+                max={5000}
+                step={20}
+                value={s.browserNetLimit}
+                onChange={num('browserNetLimit', 20, 5000)}
+              />
+              <span className="field__hint">Oldest first out. 400 is about two minutes of a busy page.</span>
+            </label>
+
+            <label className="field">
+              <span className="field__label">Model for a new Claude session</span>
+              <select
+                className="select"
+                value={s.claudeModel}
+                onChange={(e) => set('claudeModel', e.target.value)}
+              >
+                <option value="">CLI default</option>
+                {CLAUDE_MODELS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                Only used when GRID starts one for you. A session already running keeps the flags
+                it was started with.
+              </span>
+            </label>
+
+            <label className="field">
+              <span className="field__label">Effort for a new Claude session</span>
+              <select
+                className="select"
+                value={s.claudeEffort}
+                onChange={(e) => set('claudeEffort', e.target.value)}
+              >
+                <option value="">CLI default</option>
+                {CLAUDE_EFFORTS.map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ gridColumn: '1 / -1' }}>
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={s.browserCaptureBodies}
+                  onChange={(e) => set('browserCaptureBodies', e.target.checked)}
+                />
+                Keep response bodies for API calls, documents and anything that failed
+              </label>
+            </div>
           </div>
 
           <div className="settings-section">Session</div>

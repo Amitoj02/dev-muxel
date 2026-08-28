@@ -22,7 +22,8 @@
     "fixtures:git": "bash scripts/make-git-fixtures.sh .git-fixtures",
     "check:git": "node --experimental-strip-types --no-warnings scripts/check-git.mts",
     "check:layout": "node --experimental-strip-types --no-warnings scripts/check-layout.mts",
-    "check": "npm run check:layout && npm run check:git",
+    "check:browser": "node --experimental-strip-types --no-warnings scripts/check-browser.mts",
+    "check": "npm run check:layout && npm run check:git && npm run check:browser",
     "icon": "node scripts/make-icon.mjs"
   },
   "dependencies": {

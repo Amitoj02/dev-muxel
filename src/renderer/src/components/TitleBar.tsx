@@ -55,6 +55,13 @@ export function TitleBar(): React.JSX.Element {
         >
           <IconPlus size={10} /> Terminal
         </button>
+        <button
+          className="menu-item"
+          onClick={() => actions.addBrowserSmart()}
+          title="New browser pane — Ctrl+Alt+G"
+        >
+          <IconPlus size={10} /> Browser
+        </button>
         <button className="menu-item" onClick={() => actions.addNote()} title="New note — Ctrl+Alt+N">
           <IconPlus size={10} /> Note
         </button>

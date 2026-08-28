@@ -4,16 +4,22 @@
     <meta charset="UTF-8" />
     <title>GRID</title>
     <!--
-      Nothing here is ever fetched from the network: the fonts are vendored and
-      the only content rendered is the user's own terminals. `style-src` keeps
-      'unsafe-inline' because xterm.js injects a <style> element at runtime for
-      its scrollbar theme, and Vite's dev server injects one for HMR. There is
-      no HTML-injection surface to protect: terminal output goes through xterm's
-      text nodes and notes live in a <textarea>.
+      This document still fetches nothing from the network: the fonts are
+      vendored and the only content it renders is the user's own terminals.
+      `style-src` keeps 'unsafe-inline' because xterm.js injects a <style>
+      element at runtime for its scrollbar theme, and Vite's dev server injects
+      one for HMR. There is no HTML-injection surface to protect: terminal
+      output goes through xterm's text nodes and notes live in a <textarea>.
+
+      `frame-src` is the one thing that had to open up. A <webview> is a guest
+      view wrapped in an iframe, so the embedder's frame-src decides whether it
+      may load at all, and a browser pane exists to load http and https. The
+      guest is a separate, sandboxed process in its own session with its own
+      CSP; nothing it does runs in this document.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'"
+      content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://localhost:* http://localhost:*; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src http: https:"
     />
   </head>
   <body>

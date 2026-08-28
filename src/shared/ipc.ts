@@ -33,6 +33,15 @@ export const CH = {
 
   shellsList: 'grid:shells:list',
 
+  browserAttach: 'grid:browser:attach',
+  browserDetach: 'grid:browser:detach',
+  browserEmulate: 'grid:browser:emulate',
+  browserEntries: 'grid:browser:entries',
+  browserBody: 'grid:browser:body',
+  browserClear: 'grid:browser:clear',
+  browserStash: 'grid:browser:stash',
+
+
   winMinimise: 'grid:win:minimise',
   winToggleMaximise: 'grid:win:toggleMaximise',
   winClose: 'grid:win:close',
@@ -48,6 +57,9 @@ export const EV = {
   ptyData: 'grid:ev:pty:data',
   ptyExit: 'grid:ev:pty:exit',
   gitState: 'grid:ev:git:state',
+  browserNet: 'grid:ev:browser:net',
+  browserCapture: 'grid:ev:browser:capture',
+  browserFocus: 'grid:ev:browser:focus',
   winMaximised: 'grid:ev:win:maximised',
   winFocus: 'grid:ev:win:focus',
   appBeforeQuit: 'grid:ev:app:beforeQuit',

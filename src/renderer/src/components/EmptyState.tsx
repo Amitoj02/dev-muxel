@@ -67,6 +67,9 @@ export function EmptyState(): React.JSX.Element {
             >
               <IconScan size={11} /> Scan a folder
             </button>
+            <button className="btn btn--ghost" onClick={() => actions.addBrowserSmart()}>
+              Start with a browser
+            </button>
             <button className="btn btn--ghost" onClick={() => actions.addNote()}>
               Start with a note
             </button>

@@ -25,7 +25,13 @@ export const defaultSettings: Settings = {
   copyOnSelect: true,
   rightClickPastes: true,
   showGridLines: true,
-  renderer: 'dom'
+  renderer: 'dom',
+  // 400 rows is about two minutes of a chatty dev server, and the log is only
+  // ever read backwards from "the one that just failed".
+  browserNetLimit: 400,
+  browserCaptureBodies: true,
+  claudeModel: '',
+  claudeEffort: ''
 }
 
 export function defaultState(): PersistedState {

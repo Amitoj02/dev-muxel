@@ -13,6 +13,7 @@ import type { PersistedState } from '../../../shared/types'
 import { actions, attentionCount, getState, subscribe } from './store'
 import { hydrate, toPersisted } from './store'
 import { getSession } from '../terminal/session'
+import { ingestNet, setNetStatus } from '../browser/netlog'
 
 const SAVE_DEBOUNCE_MS = 500
 
@@ -51,6 +52,25 @@ function wireEvents(): void {
 
   window.grid.on.gitState((path, git) => {
     actions.setGit(path, git)
+  })
+
+  // Network entries land in a registry of their own rather than in the store:
+  // a busy page is hundreds of updates a second, and the store notifies every
+  // pane on every change.
+  window.grid.on.browserNet((paneId, entries) => {
+    ingestNet(paneId, entries, getState().settings.browserNetLimit ?? 400)
+  })
+
+  window.grid.on.browserCapture((paneId, status) => {
+    setNetStatus(paneId, status.attached, status.reason)
+  })
+
+  // Clicking into a page focuses another WebContents entirely, so the click
+  // never reaches this document. Main tells us instead, or the grid would go
+  // on thinking whichever pane you came from is still the focused one — and
+  // Ctrl+Alt+W would close that one.
+  window.grid.on.browserFocus((paneId) => {
+    actions.focusPane(paneId)
   })
 
   // Nothing to do on focus: main already refreshes every repository when the

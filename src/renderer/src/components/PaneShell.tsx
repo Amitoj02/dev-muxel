@@ -22,6 +22,7 @@ import {
 } from '../state/hooks'
 import { PaneHeader } from './PaneHeader'
 import { TerminalPane } from './TerminalPane'
+import { BrowserPane } from './BrowserPane'
 import { NotePane, ago } from './NotePane'
 import { getSession } from '../terminal/session'
 import { useTick } from '../lib/useTick'
@@ -45,7 +46,9 @@ export const PaneShell = memo(function PaneShell({
   const focused = app.focusedPaneId === pane.id
   const runtime = runtimeFor(app, pane.id)
   const git = gitFor(app, pane)
-  const repo = pane.kind === 'terminal' ? repoById(app, pane.repoId) : null
+  // A browser pane wears its repository's colour too — it is the same project,
+  // and picking it out of a wall of panes is the same problem.
+  const repo = pane.kind === 'note' ? null : repoById(app, pane.repoId)
   const note = pane.kind === 'note' ? noteById(app, pane.noteId) : null
   const accent = accentOf(repo?.color)
 
@@ -90,7 +93,7 @@ export const PaneShell = memo(function PaneShell({
 
   return (
     <section
-      className={pane.kind === 'note' ? 'pane pane--note' : 'pane'}
+      className={paneClass(pane)}
       style={paneStyle(rect, accent)}
       data-focused={focused}
       data-accent={accent ? 'true' : undefined}
@@ -114,7 +117,7 @@ export const PaneShell = memo(function PaneShell({
           actions.focusPane(pane.id)
           getSession(pane.id)?.focus()
         }}
-        onSplit={pane.kind === 'terminal' ? () => actions.splitFrom(pane.id, 'right') : undefined}
+        onSplit={pane.kind === 'note' ? undefined : () => actions.splitFrom(pane.id, 'right')}
         onOpenEditor={
           pane.kind === 'terminal'
             ? () => {
@@ -127,14 +130,23 @@ export const PaneShell = memo(function PaneShell({
         onDragStart={(e) => onDragStart(pane.id, e)}
       />
 
-      {pane.kind === 'terminal' ? (
-        <TerminalPane pane={pane} repo={repo} focused={focused} />
-      ) : (
+      {pane.kind === 'terminal' && <TerminalPane pane={pane} repo={repo} focused={focused} />}
+      {pane.kind === 'note' && (
         <NotePane note={note} focused={focused} onSend={sendToTerminal} />
+      )}
+      {pane.kind === 'browser' && (
+        <BrowserPane pane={pane} zoomed={zoomed} onZoom={() => actions.toggleZoom(pane.id)} />
       )}
     </section>
   )
 })
+
+/** Notes are the warm variant of the chassis; the browser is the cool one. */
+function paneClass(pane: Pane): string {
+  if (pane.kind === 'note') return 'pane pane--note'
+  if (pane.kind === 'browser') return 'pane pane--browser'
+  return 'pane'
+}
 
 /**
  * Geometry, plus the repository's accent as a custom property for the header

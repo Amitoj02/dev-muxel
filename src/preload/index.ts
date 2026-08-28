@@ -11,13 +11,15 @@
 
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { CH, EV } from '../shared/ipc'
+import type { NetEntry } from '../shared/browser'
 import type {
   GitState,
   PersistedState,
   PtySpawnResult,
   RepoScanResult,
   Settings,
-  ShellProfile
+  ShellProfile,
+  ViewportId
 } from '../shared/types'
 
 type Off = () => void
@@ -102,6 +104,39 @@ const api = {
     list: (): Promise<ShellProfile[]> => ipcRenderer.invoke(CH.shellsList)
   },
 
+  /**
+   * Browser panes. The <webview> itself is driven straight from the renderer;
+   * only the things a sandboxed page cannot do are bridged — attaching the
+   * network debugger, device emulation, and reading a response body back out
+   * of the protocol.
+   */
+  browser: {
+    attach: (paneId: string, webContentsId: number): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(CH.browserAttach, paneId, webContentsId),
+    detach: (paneId: string): Promise<void> => ipcRenderer.invoke(CH.browserDetach, paneId),
+    emulate: (
+      paneId: string,
+      viewport: ViewportId,
+      userAgent: string
+    ): Promise<{ ok: boolean; missing: string[] }> =>
+      ipcRenderer.invoke(CH.browserEmulate, paneId, viewport, userAgent),
+    entries: (paneId: string): Promise<{ entries: NetEntry[]; attached: boolean }> =>
+      ipcRenderer.invoke(CH.browserEntries, paneId),
+    /** Addressed by the log entry's uid: a redirect chain shares one request id. */
+    body: (
+      paneId: string,
+      uid: string
+    ): Promise<{ ok: boolean; text?: string; base64?: boolean; error?: string }> =>
+      ipcRenderer.invoke(CH.browserBody, paneId, uid),
+    clear: (paneId: string): Promise<void> => ipcRenderer.invoke(CH.browserClear, paneId),
+    /** Park a capture on disk when it is too big to paste into a session. */
+    stash: (
+      text: string,
+      hint: string
+    ): Promise<{ ok: true; path: string; dir: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(CH.browserStash, text, hint)
+  },
+
   window: {
     minimise: (): void => {
       ipcRenderer.send(CH.winMinimise)
@@ -142,6 +177,12 @@ const api = {
     ptyExit: (cb: (paneId: string, exitCode: number, solicited: boolean) => void): Off =>
       listen(EV.ptyExit, cb),
     gitState: (cb: (path: string, state: GitState) => void): Off => listen(EV.gitState, cb),
+    browserNet: (cb: (paneId: string, entries: NetEntry[]) => void): Off =>
+      listen(EV.browserNet, cb),
+    browserCapture: (
+      cb: (paneId: string, status: { attached: boolean; reason: string | null }) => void
+    ): Off => listen(EV.browserCapture, cb),
+    browserFocus: (cb: (paneId: string) => void): Off => listen(EV.browserFocus, cb),
     windowMaximised: (cb: (maximised: boolean) => void): Off => listen(EV.winMaximised, cb),
     windowFocus: (cb: (focused: boolean) => void): Off => listen(EV.winFocus, cb),
     beforeQuit: (cb: () => void): Off => listen(EV.appBeforeQuit, cb),

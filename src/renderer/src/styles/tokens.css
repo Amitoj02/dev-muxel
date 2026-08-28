@@ -44,6 +44,15 @@
   --green: #62c08a;
   --amber: #c9a227;
 
+  /* --- browser (cool variant of the chassis) ------------------------- */
+  --browser-bg: #090d14;
+  --browser-header: #111825;
+  --browser-line: #1a2433;
+  --browser-line-focus: #2c4258;
+  --blue: #5b8fd6;
+  --blue-light: #7fa9e8;
+  --blue-wash: rgba(91, 143, 214, 0.14);
+
   /* --- notes (warm variant of the chassis) --------------------------- */
   --note-bg: #14140f;
   --note-header: #1c1b14;

@@ -58,6 +58,13 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
         if (getState().focusedPaneId === pane.id) return
         actions.raiseAttention(pane.id, signal === 'bell' ? 'bell' : 'idle')
       },
+      onShellBack: () => {
+        // Whatever GRID started in here has exited and the shell has the
+        // terminal back. Forgetting the command is what stops a captured
+        // request being pasted into a bare prompt on the strength of a CLI
+        // that is no longer running.
+        actions.patchRuntime(pane.id, { ranStartup: null })
+      },
       onShortcut: (e) => handleTerminalShortcut(pane.id, e, () => setSearching(true))
     }
 
@@ -98,17 +105,36 @@ export function TerminalPane({ pane, repo, focused }: TerminalPaneProps): React.
           })
 
           // A pane restored from the last session only re-runs its command if
-          // the user opted in; a pane just opened always does.
+          // the user opted in; a pane just opened always does. A command GRID
+          // chose for one specific terminal — a Claude session opened on a
+          // captured request, say — is never replayed: it points at a capture
+          // file that may be long gone, and "restored terminals re-run their
+          // repository command" promises the repository's command, not that.
           const restored = getState().restoredPaneIds.has(pane.id)
-          const allowed = !restored || getState().settings.restoreRunsStartup
+          const oneShot = pane.runStartup !== undefined
+          const allowed = !restored || (getState().settings.restoreRunsStartup && !oneShot)
           const command = allowed ? (pane.startupCommand ?? repo?.startupCommand) : null
           if (command) {
+            // `runStartup` is set only when GRID picked the command itself, so
+            // it is the flag that distinguishes the two cases; a repository's
+            // own command still answers to the repository's "press Enter for
+            // me".
+            const run = pane.runStartup ?? repo?.runOnOpen ?? false
             // Give the shell a moment to print its own prompt first, otherwise
             // the command lands in the middle of the banner.
             window.setTimeout(() => {
               if (cancelled) return
-              const run = repo?.runOnOpen ?? false
               window.grid.pty.write(pane.id, run ? `${command}\r` : command)
+              // Recorded only when Enter was actually pressed. Anything that
+              // asks "is a CLI running in this pane" has to key off what ran,
+              // not off what the repository is configured with — the command
+              // is typed either way.
+              if (run) {
+                actions.patchRuntime(pane.id, { ranStartup: command })
+                // From here the session watches for that command taking the
+                // terminal and later letting go of it.
+                session.armShellWatch()
+              }
             }, 400)
           }
         })

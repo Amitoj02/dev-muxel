@@ -16,12 +16,14 @@ import { useEffect } from 'react'
 import { measure, neighbour } from '../../../shared/layout'
 import { classifyChord } from './chords'
 import { actions, getState } from '../state/hooks'
+import { getView } from '../browser/netlog'
 import { getSession } from '../terminal/session'
 
 export type Shortcut = { keys: string; what: string }
 
 export const SHORTCUTS: Shortcut[] = [
   { keys: 'Ctrl+Alt+T', what: 'New terminal' },
+  { keys: 'Ctrl+Alt+G', what: 'New browser pane' },
   { keys: 'Ctrl+Alt+N', what: 'New note' },
   { keys: 'Ctrl+Alt+D', what: 'Split the focused pane to the right' },
   { keys: 'Ctrl+Alt+S', what: 'Split the focused pane downwards' },
@@ -55,6 +57,8 @@ export function runAction(action: string): void {
     case 'new-note':
       actions.addNote()
       return
+    case 'new-browser':
+      return actions.addBrowserSmart()
     case 'split-right':
       if (focused) actions.splitFrom(focused, 'right')
       return
@@ -128,7 +132,11 @@ export function runAction(action: string): void {
 
 function focusPane(paneId: string): void {
   actions.focusPane(paneId)
+  // Marking a pane focused in the store is not the same as the keyboard going
+  // there: a terminal's keys live in xterm's textarea and a browser pane's in
+  // another process entirely, so whichever this pane is, it is told directly.
   getSession(paneId)?.focus()
+  getView(paneId)?.focus()
 }
 
 function clampFont(size: number): number {
@@ -145,6 +153,8 @@ function actionForChord(e: KeyboardEvent): string | null {
         return 'new-terminal'
       case 'n':
         return 'new-note'
+      case 'g':
+        return 'new-browser'
       case 'd':
         return 'split-right'
       case 's':

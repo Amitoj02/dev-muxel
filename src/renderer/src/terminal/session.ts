@@ -49,6 +49,11 @@ export type SessionCallbacks = {
   onAck: (bytes: number) => void
   onAttention: (signal: AttentionSignal) => void
   onTitle: (title: string) => void
+  /**
+   * A full-screen program let go of the terminal — bracketed paste went off,
+   * which is a CLI exiting back to its shell.
+   */
+  onShellBack: () => void
   /** A GRID shortcut was pressed inside the terminal; the app handles it. */
   onShortcut: (e: KeyboardEvent) => boolean
 }
@@ -191,6 +196,11 @@ export class TerminalSession {
   private disposed = false
   /** Set once OSC 133 shows up, so the idle heuristic can stand down. */
   private hasShellIntegration = false
+  /**
+   * Where the bracketed-paste watch has got to: nothing started by GRID,
+   * something started and not yet claiming the terminal, or claiming it.
+   */
+  private pasteWatch: 'idle' | 'armed' | 'claimed' = 'idle'
 
   constructor(
     readonly paneId: string,
@@ -221,6 +231,16 @@ export class TerminalSession {
       this.term.onTitleChange((t) => this.cb.onTitle(t)),
       this.term.onBell(() => {
         if (this.bellIsAttention) this.cb.onAttention('bell')
+      }),
+      // DECSET/DECRST 2004 — bracketed paste, watched at parse time. Returning
+      // false leaves xterm to handle the sequence as it normally would.
+      this.term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, (params) => {
+        if (params.includes(2004)) this.onPasteMode(true)
+        return false
+      }),
+      this.term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, (params) => {
+        if (params.includes(2004)) this.onPasteMode(false)
+        return false
       })
     )
 
@@ -325,6 +345,40 @@ export class TerminalSession {
     })
 
     this.armIdleTimer()
+  }
+
+  /**
+   * GRID has just pressed Enter on a command; watch for the program it started
+   * taking the terminal, and then letting go of it again.
+   */
+  armShellWatch(): void {
+    this.pasteWatch = 'armed'
+  }
+
+  /**
+   * Notice the moment a program GRID started hands the terminal back.
+   *
+   * Bracketed paste is turned on by the program that wants it and off again as
+   * it exits, so a falling edge looks like the CLI leaving. It is not, on its
+   * own: a shell's own readline turns the mode *off before it runs the line
+   * you just typed*, so the first fall after Enter is the shell accepting the
+   * command, not a CLI exiting. Acting on that killed the feature for every
+   * bash and WSL pane — the flag was cleared a moment after being set.
+   *
+   * So a fall only counts once the program has been seen to claim the mode for
+   * itself. This is also why the escapes are watched as they are parsed rather
+   * than sampled after each write: an off/on pair arriving inside one 8ms pty
+   * batch would otherwise be coalesced into no change at all.
+   */
+  private onPasteMode(on: boolean): void {
+    if (this.pasteWatch === 'idle') return
+    if (on) {
+      this.pasteWatch = 'claimed'
+      return
+    }
+    if (this.pasteWatch !== 'claimed') return
+    this.pasteWatch = 'idle'
+    this.cb.onShellBack()
   }
 
   /** Write GRID's own text into the pane (never echoed back to the pty). */

@@ -21,6 +21,7 @@ import { EV } from '../shared/ipc'
 export type MenuAction =
   | 'new-terminal'
   | 'new-note'
+  | 'new-browser'
   | 'split-right'
   | 'split-down'
   | 'close-pane'
@@ -63,6 +64,7 @@ export function buildMenu(getWindow: () => BrowserWindow | null): void {
       label: '&Grid',
       submenu: [
         item('New terminal', 'Ctrl+Alt+T', 'new-terminal'),
+        item('New browser', 'Ctrl+Alt+G', 'new-browser'),
         item('New note', 'Ctrl+Alt+N', 'new-note'),
         { type: 'separator' },
         item('Repositories', 'Ctrl+Alt+R', 'repositories'),

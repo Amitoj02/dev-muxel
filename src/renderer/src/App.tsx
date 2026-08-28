@@ -13,6 +13,7 @@ import { NotesPanel } from './components/NotesPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ConfirmClose } from './components/ConfirmClose'
+import { SendToClaude } from './components/SendToClaude'
 import { Toast } from './components/Toast'
 import { useShortcuts } from './lib/useShortcuts'
 import { useFolderDrop } from './lib/useFolderDrop'
@@ -53,6 +54,9 @@ export function App(): React.JSX.Element {
       {app.overlay.kind === 'settings' && <SettingsPanel />}
       {app.overlay.kind === 'shortcuts' && <ShortcutsSheet />}
       {app.overlay.kind === 'confirm-close' && <ConfirmClose paneId={app.overlay.paneId} />}
+      {app.overlay.kind === 'send-to-claude' && (
+        <SendToClaude paneId={app.overlay.paneId} uids={app.overlay.uids} />
+      )}
 
       {app.toast && (
         <Toast key={app.toast.id} text={app.toast.text} tone={app.toast.tone} onDone={actions.clearToast} />
