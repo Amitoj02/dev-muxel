@@ -67,6 +67,47 @@ export class PtyManager {
     return this.sessions.has(paneId)
   }
 
+  /**
+   * Environment variables that say "you are inside a running Claude Code
+   * session", stripped from every pane's shell.
+   *
+   * GRID exists to run CLI sessions, so it is routinely launched *from* one —
+   * a terminal, a script, another agent. Whatever started GRID, its markers
+   * are inherited by the Electron process and would otherwise be copied into
+   * every pane, where a fresh `claude` reads them and believes it is a child
+   * of that other session: it stops saving its transcript, and it is handed a
+   * messaging socket and token belonging to somebody else's session.
+   *
+   * Only identity is stripped. Preferences a user deliberately exported —
+   * `CLAUDE_CODE_EFFORT_LEVEL`, `CLAUDE_CODE_FORCE_SESSION_PERSISTENCE` — are
+   * theirs and are passed through.
+   */
+  private static readonly SESSION_MARKERS = [
+    'CLAUDECODE',
+    'CLAUDE_CODE_CHILD_SESSION',
+    'CLAUDE_CODE_ENTRYPOINT',
+    'CLAUDE_CODE_SESSION_ID',
+    'CLAUDE_CODE_MESSAGING_SOCKET',
+    'CLAUDE_CODE_MESSAGING_TOKEN',
+    'CLAUDE_PID'
+  ]
+
+  /**
+   * Descriptions of somebody else's output, stripped for the same reason.
+   *
+   * A parent that captures its children's output sets `NO_COLOR` so it gets
+   * plain text — Claude Code does exactly this. Inherited by GRID and handed
+   * down, it tells every CLI in every pane that the terminal it is drawing
+   * into cannot do colour, which is untrue: this is a real pty, and GRID has
+   * just told it so with `TERM=xterm-256color`. The variable describes the
+   * pipe that launched GRID, not the terminal GRID made.
+   *
+   * A user who genuinely wants colourless panes still has somewhere to say so
+   * — a shell profile's own `env`, which is merged after this and therefore
+   * wins.
+   */
+  private static readonly PARENT_OUTPUT_HINTS = ['NO_COLOR', 'FORCE_COLOR']
+
   spawn(
     paneId: string,
     shell: ShellProfile,
@@ -80,13 +121,24 @@ export class PtyManager {
     for (const [k, v] of Object.entries(process.env)) {
       if (typeof v === 'string') env[k] = v
     }
-    Object.assign(env, shell.env ?? {})
-    // Tell anything that cares it is inside a real terminal in GRID.
-    env.TERM_PROGRAM = 'grid'
-    env.GRID_PANE = paneId
+    // Three layers, in the order of who should win. First, what GRID inherited,
+    // minus everything that describes the process that launched it rather than
+    // the terminal being made here.
+    //
     // Electron leaks these into children and they confuse node tooling.
     delete env.ELECTRON_RUN_AS_NODE
     delete env.ELECTRON_NO_ATTACH_CONSOLE
+    for (const key of PtyManager.SESSION_MARKERS) delete env[key]
+    for (const key of PtyManager.PARENT_OUTPUT_HINTS) delete env[key]
+
+    // Then the shell profile's own env, which is where a user asks for
+    // something specific — including anything stripped above.
+    Object.assign(env, shell.env ?? {})
+
+    // Last, the two facts only GRID can state. Nothing may override these:
+    // the pane id is how output finds its way home.
+    env.TERM_PROGRAM = 'grid'
+    env.GRID_PANE = paneId
 
     const pty = spawnPty(shell.path, shell.args ?? [], {
       name: 'xterm-256color',
