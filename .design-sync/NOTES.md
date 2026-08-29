@@ -8,14 +8,16 @@ An Electron app, not a published component library: `private: true`, no `dist/`,
 barrel export. The sync runs in **synthesized-entry mode** against `src/renderer/src/components`.
 Everything below follows from that.
 
-## Two generated inputs must be built before the converter
+## Three generated inputs must be built before the converter
 
-`.design-sync/config.json` points `cssEntry` and the types root at generated files.
-Both scripts are committed; run them from the repo root before `package-build.mjs`:
+`.design-sync/config.json` points `cssEntry`, the types root and the entry at
+generated files. All three scripts are committed; run them from the repo root
+before `package-build.mjs`:
 
 ```sh
 node .design-sync/make-styles.mjs   # → .design-sync/.cache/ds-styles.css
 node .design-sync/make-types.mjs    # → types/ (+ types/index.d.ts)
+node .design-sync/make-entry.mjs    # → .design-sync/.cache/entry.tsx (exits 1 on map drift)
 ```
 
 - **`make-styles.mjs`** concatenates `tokens.css` + `@xterm/xterm/css/xterm.css` + `app.css`
@@ -32,11 +34,12 @@ node .design-sync/make-types.mjs    # → types/ (+ types/index.d.ts)
 
 `package.json` `main` points at `out/main/index.js` — the **Electron main-process**
 bundle. Left to itself the converter picks that up as the dist entry, which is wrong.
-`.design-sync/.cache/entry.tsx` re-exports every component file; regenerate it if
-components are added (it is gitignored — the generator is inline in the run below).
-`componentSrcMap` enumerates all 44 components because with an explicit `--entry` the
-converter does not fall back to src discovery. **Adding a component means adding it to
-`componentSrcMap` and to the entry**, or it will not be synced.
+`make-entry.mjs` writes `.design-sync/.cache/entry.tsx` (gitignored), which re-exports
+every component file. `componentSrcMap` enumerates all 44 components because with an
+explicit `--entry` the converter does not fall back to src discovery — so a component
+missing from that map is **silently absent from the sync, with no warning anywhere**.
+That is what `make-entry.mjs` guards: it exits 1 listing any component missing from the
+map, and any mapped name whose component is gone. Run it before every build.
 
 `src/renderer/src/main.tsx` must stay out of the entry: it calls `connect()` at module
 scope, which would run the Electron bridge at bundle load. `srcDir` is scoped to
@@ -116,9 +119,10 @@ No 200MB browser download is needed.
 
 ## Re-sync risks
 
-- **`componentSrcMap` and the entry rot on every component add.** Neither regenerates
-  itself. A new component silently does not appear. This is the single most likely way
-  a future sync goes quietly wrong.
+- **`componentSrcMap` rots on every component add**, and a missing entry means the
+  component silently does not sync. This was the single most likely way a future run
+  went quietly wrong, which is why `make-entry.mjs` now fails the build on it. The risk
+  that remains is skipping that script — run it, or the guard buys you nothing.
 - **The bridge stub drifts from `src/preload/index.ts`.** New IPC surface used in a mount
   effect breaks that card. Diff the two when previews start failing with
   "is not a function".
@@ -126,7 +130,8 @@ No 200MB browser download is needed.
 - **Fixtures live in `.design-sync/previews/_fixtures.ts`** and are imported by the harness,
   so a few KB of fixture data is compiled into `_ds_bundle.js`. Deliberate — it is what
   makes the browser-pane cards real — but it is shipped weight.
-- **`types/` and `.design-sync/.cache/` are gitignored.** A fresh clone must re-run both
-  generator scripts before the converter, or the build fails on a missing entry/css.
+- **`types/` and `.design-sync/.cache/` are gitignored.** A fresh clone must re-run all
+  three generator scripts before the converter, or the build fails on a missing
+  entry/css/types root.
 - Only partially verified: nothing. All 44 components are authored and graded good, and
   the render check is clean at 44/44.
