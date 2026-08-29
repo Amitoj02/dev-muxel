@@ -1,18 +1,22 @@
-<img src="brand-kit/icons/devlobby-128.png" alt="" width="64">
+<div align="center">
+
+<img src="brand-kit/icons/devlobby-128.png" alt="" width="84">
 
 # DevLobby
 
 **A repo-aware tiled workspace for terminals, browsers, and AI coding sessions.**
 
-```
-┌─ atlas-api  main  *3 +2 ───────────┬─ ledger-cli  fix/parse  clean ────┐
-│ > claude                           │ > npm run test:watch              │
-│   waiting on your answer           │   PASS  12 files, 68 tests        │
-├─ mercury-web  localhost:5173 ──────┼─ scratch  saved just now ─────────┤
-│ ← → ⟳  localhost:5173/checkout     │ ask claude to add the webhook     │
-│   NET 3  POST /api/orders  500     │ retry test to atlas-api           │
-└────────────────────────────────────┴───────────────────────────────────┘
-```
+[![Download](https://img.shields.io/badge/download-latest_release-e5372a?style=flat-square)](https://github.com/Amitoj02/devlobby/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)](#install)
+[![Electron](https://img.shields.io/badge/Electron-43-47848F?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/license-MIT-62c08a?style=flat-square)](./LICENSE)
+[![Made with Claude](https://img.shields.io/badge/made_with-Claude-D97757?style=flat-square&logo=claude&logoColor=white)](https://claude.com/claude-code)
+
+<img src="docs/media/hero.png" alt="Four panes in one window: a Claude session on atlas-api, a passing test run on ledger-cli, the mercury-web checkout page, and the dev server serving it" width="100%">
+
+</div>
 
 Every pane knows the repository it sits in and what that repository's working
 tree is doing. When one needs you — it rang the bell, or went quiet on a
@@ -24,6 +28,15 @@ log of every request the page makes, and any one of those requests goes to a
 Claude session two panes over with a note attached.
 
 Windows only.
+
+|  |  |
+|---|---|
+| [**Build the grid**](#build-the-grid) | drag a pane onto another to split, drag the gutters to resize, `⤢` to fill the window |
+| [**Read a pane**](#reading-a-pane) | branch, dirty count, untracked count and upstream drift, in the header |
+| [**Get told**](#when-a-pane-needs-you) | a pane that wants you glows red and counts towards `N waiting` in the titlebar |
+| [**Mark a page up**](#marking-a-page-up) | point at an element, say what is wrong, hand the lot to a Claude session |
+| [**Read the traffic**](#the-network-log) | every request the page made, and the whole exchange for any of them |
+| [**Undo a close**](#closed-one-by-mistake) | `Ctrl+Shift+T` brings the pane back still running, not restarted |
 
 ---
 
@@ -52,6 +65,8 @@ leaves them alone.
 directory your projects live in and take them all at once. Dropping a folder
 anywhere on the window works too.
 
+<img src="docs/media/repositories.png" alt="The repositories panel: three projects with their branch, dirty count and upstream drift" width="100%">
+
 **2. Say what each one opens with.** The `⋯` button on a repository row opens
 its settings:
 
@@ -69,10 +84,17 @@ which drops down the list of repositories so you can say which one — plus
 menu and reuses the focused pane's repository. `＋ Browser` opens a browser pane
 on the same project.
 
-**4. Build the grid.** Drag a pane by its header onto another pane; the half you
-hover over becomes the split. Drop it in the middle to swap the two. Drag the
-gutters between panes to resize. `⤢` fills the window with one pane, and `Esc`
-puts it back.
+## Build the grid
+
+Drag a pane by its header onto another pane; the half you hover over becomes
+the split. Drop it in the middle to swap the two. Drag the gutters between
+panes to resize. `⤢` fills the window with one pane, and `Esc` puts it back.
+
+<img src="docs/media/layout.gif" alt="Dragging a pane onto the bottom half of another to split it, dragging the gutters to resize, and filling the window with one pane" width="100%">
+
+Nothing restarts while you rearrange. The shell behind a terminal and the page
+behind a browser pane both survive being moved, because a pane changes address
+rather than being rebuilt.
 
 ## Tabs
 
@@ -115,6 +137,8 @@ elsewhere, glows red and grows a `NEEDS YOU` badge, and the titlebar shows
 another window, its taskbar button flashes and the window title becomes
 `N waiting - DevLobby`.
 
+<img src="docs/media/needs-you.png" alt="The ledger-cli pane outlined in red with a NEEDS YOU badge, and 1 waiting in the titlebar" width="100%">
+
 ## Closed one by mistake
 
 `Ctrl+Shift+T` brings back the last thing you closed. For five seconds after a
@@ -155,12 +179,16 @@ selector on. Hover and every element under the cursor is outlined with its tag
 and size; click one and a box opens over the page for you to say what is wrong
 with it. `Enter` adds the comment.
 
+<img src="docs/media/mark-up-a-page.png" alt="The element picker outlining the pay button, labelled button#pay 258×39" width="100%">
+
 The selector **stays on**. Adding a comment puts you straight back into
 pointing, because marking a page up is a run of remarks and not one — it is off
 only when you press `Esc` or click the button again.
 
 Not everything is about one element, so the list also takes a plain note about
 the page as a whole.
+
+<img src="docs/media/comments.png" alt="Two comments gathered in the pane, each with the CSS path to its element and the width it was written at" width="100%">
 
 Comments stay in the pane behind a count on that button. Nothing is sent, and
 there is nothing to decide at the moment of writing — you mark the page up at
@@ -211,6 +239,8 @@ failed. Filter it, or tick *failed* for just the 4xx, 5xx and never-arrived.
 Click a row to open the whole exchange — request headers, request body,
 response headers, response body.
 
+<img src="docs/media/network-log.png" alt="The network log with one failed POST expanded, showing its request headers and body" width="100%">
+
 The log survives a reload on purpose, so a request that only fails on the way
 in is still there afterwards. `Clear` empties it.
 
@@ -219,6 +249,8 @@ in is still there afterwards. `Clear` empties it.
 Tick the requests you care about and press `Claude`, or open a row and use
 `Send to Claude`. Write what you actually want to know, and DevLobby formats
 the exchange underneath it and pastes the lot into a session:
+
+<img src="docs/media/send-to-claude.png" alt="The send-to-Claude dialog: the question, which session it goes to, the model and effort, and how many credentials were taken out" width="100%">
 
 - **A session already running** gets it pasted in, without a trailing newline —
   you read it back and press Enter yourself. It answers with whatever `--model`

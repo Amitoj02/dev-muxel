@@ -8,3 +8,6 @@
 *.woff2 binary
 *.ico   binary
 *.png   binary
+
+# Recorded media.
+*.gif   binary
