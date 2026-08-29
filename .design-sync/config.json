@@ -1,0 +1,132 @@
+{
+  "pkg": "dev-muxel",
+  "globalName": "DevMuxel",
+  "shape": "package",
+  "srcDir": "src/renderer/src/components",
+  "tsconfig": "tsconfig.web.json",
+  "cssEntry": ".design-sync/.cache/ds-styles.css",
+  "extraFonts": [
+    "src/renderer/src/styles/fonts.css"
+  ],
+  "componentSrcMap": {
+    "BrowserPane": "src/renderer/src/components/BrowserPane.tsx",
+    "CommentPopover": "src/renderer/src/components/PageComments.tsx",
+    "CommentsPanel": "src/renderer/src/components/PageComments.tsx",
+    "ConfirmClose": "src/renderer/src/components/ConfirmClose.tsx",
+    "ConfirmCloseTab": "src/renderer/src/components/ConfirmCloseTab.tsx",
+    "EmptyState": "src/renderer/src/components/EmptyState.tsx",
+    "GridView": "src/renderer/src/components/GridView.tsx",
+    "IconArrowDown": "src/renderer/src/components/Icons.tsx",
+    "IconArrowLeft": "src/renderer/src/components/Icons.tsx",
+    "IconArrowRight": "src/renderer/src/components/Icons.tsx",
+    "IconArrowUp": "src/renderer/src/components/Icons.tsx",
+    "IconBranch": "src/renderer/src/components/Icons.tsx",
+    "IconClose": "src/renderer/src/components/Icons.tsx",
+    "IconDot": "src/renderer/src/components/Icons.tsx",
+    "IconFolder": "src/renderer/src/components/Icons.tsx",
+    "IconGlobe": "src/renderer/src/components/Icons.tsx",
+    "IconMaximise": "src/renderer/src/components/Icons.tsx",
+    "IconMinimise": "src/renderer/src/components/Icons.tsx",
+    "IconPick": "src/renderer/src/components/Icons.tsx",
+    "IconPlus": "src/renderer/src/components/Icons.tsx",
+    "IconRefresh": "src/renderer/src/components/Icons.tsx",
+    "IconRestore": "src/renderer/src/components/Icons.tsx",
+    "IconScan": "src/renderer/src/components/Icons.tsx",
+    "IconSearch": "src/renderer/src/components/Icons.tsx",
+    "IconSend": "src/renderer/src/components/Icons.tsx",
+    "IconTrash": "src/renderer/src/components/Icons.tsx",
+    "IconUnzoom": "src/renderer/src/components/Icons.tsx",
+    "IconZoom": "src/renderer/src/components/Icons.tsx",
+    "MenuPopover": "src/renderer/src/components/MenuPopover.tsx",
+    "NetworkLog": "src/renderer/src/components/NetworkLog.tsx",
+    "NewTerminalMenu": "src/renderer/src/components/NewTerminalMenu.tsx",
+    "NotePane": "src/renderer/src/components/NotePane.tsx",
+    "NotesPanel": "src/renderer/src/components/NotesPanel.tsx",
+    "Overlay": "src/renderer/src/components/Overlay.tsx",
+    "PaneHeader": "src/renderer/src/components/PaneHeader.tsx",
+    "PaneShell": "src/renderer/src/components/PaneShell.tsx",
+    "RepositoriesPanel": "src/renderer/src/components/RepositoriesPanel.tsx",
+    "SendToClaude": "src/renderer/src/components/SendToClaude.tsx",
+    "SettingsPanel": "src/renderer/src/components/SettingsPanel.tsx",
+    "ShortcutsSheet": "src/renderer/src/components/ShortcutsSheet.tsx",
+    "TabStrip": "src/renderer/src/components/TabStrip.tsx",
+    "TerminalPane": "src/renderer/src/components/TerminalPane.tsx",
+    "TitleBar": "src/renderer/src/components/TitleBar.tsx",
+    "Toast": "src/renderer/src/components/Toast.tsx"
+  },
+  "extraEntries": [
+    "./.design-sync/preview-support.tsx"
+  ],
+  "provider": {
+    "component": "PreviewHarness"
+  },
+  "overrides": {
+    "MenuPopover": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    },
+    "ConfirmClose": {
+      "cardMode": "single",
+      "primaryStory": "Terminal"
+    },
+    "ConfirmCloseTab": {
+      "cardMode": "single",
+      "primaryStory": "Populated"
+    },
+    "Overlay": {
+      "cardMode": "single",
+      "primaryStory": "Confirm"
+    },
+    "SendToClaude": {
+      "cardMode": "single",
+      "primaryStory": "Failure"
+    },
+    "SettingsPanel": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "RepositoriesPanel": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "NotesPanel": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "ShortcutsSheet": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "GridView": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "TitleBar": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "TabStrip": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "EmptyState": {
+      "cardMode": "single",
+      "primaryStory": "Default"
+    },
+    "NewTerminalMenu": {
+      "cardMode": "single",
+      "primaryStory": "InMenu"
+    },
+    "Toast": {
+      "cardMode": "single",
+      "primaryStory": "Error"
+    }
+  },
+  "dtsPropsFor": {
+    "SendToClaude": "paneId: string;\n  uids: string[];",
+    "CommentPopover": "element: PickedElement;\n  preset: ViewportPreset;\n  scale: number;\n  stage: { width: number; height: number };\n  onSave: (text: string) => void;\n  onCancel: () => void;",
+    "CommentsPanel": "paneId: string;\n  comments: PageComment[];\n  /** A session is holding the line for these right now. */\n  waiting: boolean;\n  /** The element selector is on and stays on until it is turned off. */\n  picking: boolean;\n  onTogglePicker: () => void;\n  onNote: (text: string) => void;\n  onSend: () => void;\n  onClose: () => void;"
+  },
+  "readmeHeader": ".design-sync/conventions.md",
+  "projectId": "a9fd4d7d-d2b8-4f8e-b51c-bf248f712b05"
+}
