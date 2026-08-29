@@ -6,6 +6,7 @@
  * repositories but no panes, the useful action is opening one of them.
  */
 
+import { BrandLockup } from './BrandMark'
 import { IconPlus, IconScan } from './Icons'
 import { actions, useApp } from '../state/hooks'
 
@@ -23,7 +24,8 @@ export function EmptyState(): React.JSX.Element {
 
   return (
     <div className="empty">
-      <span className="empty__kicker">DEVLOBBY</span>
+      {/* The one screen with room for the full lockup, so it gets it. */}
+      <BrandLockup size={28} />
 
       {hasRepos ? (
         <>

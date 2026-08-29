@@ -24,6 +24,8 @@ export type WindowDeps = {
   /** Dev server URL, or null to load the built renderer from disk. */
   devServerUrl: string | null
   rendererHtml: string
+  /** Window icon, or null to let the executable's own stand. */
+  icon: string | null
   bounds: WindowBounds
   onBoundsChanged: (bounds: WindowBounds) => void
 }
@@ -87,6 +89,7 @@ export function createWindow(deps: WindowDeps): BrowserWindow {
     thickFrame: true,
     roundedCorners: true,
     title: 'DevLobby',
+    icon: deps.icon ?? undefined,
     webPreferences: {
       preload: deps.preload,
       contextIsolation: true,

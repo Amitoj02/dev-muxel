@@ -3,11 +3,17 @@
  *
  *   npm run icon
  *
- * The mark is the app itself: a 2x2 tiling with the design's 1.24:1 column
- * ratio, drawn on the chassis blue-black, with the top-left pane in signal red —
- * the pane that wants you. It is rendered natively at every size rather than
- * downscaled from one bitmap, so the 16px Start Menu entry has the same crisp
- * 1px edges as the 256px one.
+ * The mark is a D built out of the product: a narrow pane (the stem), the
+ * gutter between them, and a wide pane crossed by its header rule (the bowl).
+ * The bowl's deep right radius closes the letter; the stem's shallow radius
+ * keeps it a pane rather than a pill. Two radii, never one — that asymmetry is
+ * what makes the silhouette read as a letter at 16px.
+ *
+ * Every measure below is a fraction of the canvas, straight off the 64-unit
+ * construction grid in brand-kit/DevLobby-Brand-Guide.html, so the whole set is
+ * redrawn natively at each size rather than downscaled from one bitmap: the
+ * 16px Start Menu entry gets its own layout, with its own 1px gutter, instead
+ * of the mush a resampler would make of one.
  *
  * Written by hand (a PNG encoder and an ICO container are about eighty lines
  * between them) rather than pulling in an image library for one build artefact.
@@ -19,13 +25,23 @@ import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const OUT = path.join(here, '..', 'build')
+const BUILD = path.join(here, '..', 'build')
+const PUBLIC = path.join(here, '..', 'src', 'renderer', 'public')
 
 // --- palette, straight from tokens.css --------------------------------------
-const CHASSIS = [0x0b, 0x0e, 0x13]
-const RED = [0xe5, 0x37, 0x2a]
-const SLATE = [0x3b, 0x47, 0x57]
-const SLATE_DIM = [0x2b, 0x34, 0x42]
+const CHASSIS = [0x0b, 0x0e, 0x13] // --bg-chassis, the ground
+const RED = [0xe5, 0x37, 0x2a] // --red, the mark
+const LINE_STRONG = [0x2b, 0x34, 0x42] // --line-strong, the band across the bowl
+
+// --- the 64-unit construction grid ------------------------------------------
+const U = 64
+const PAD = 0.115 // icon padding, as a fraction of the whole canvas
+const STEM_W = 22.5
+const GUTTER_W = 4
+const BOWL_W = 37.5
+const BAND_H = 16
+const R_STEM = 7.5
+const R_BOWL = 17.5
 
 // ---------------------------------------------------------------------------
 // A tiny RGBA canvas
@@ -44,54 +60,145 @@ function canvas(size) {
         px[i * 4 + 3] = 255
       }
     },
-    rect(x, y, w, h, rgb) {
-      const x0 = Math.max(0, Math.round(x))
-      const y0 = Math.max(0, Math.round(y))
-      const x1 = Math.min(size, Math.round(x + w))
-      const y1 = Math.min(size, Math.round(y + h))
-      for (let yy = y0; yy < y1; yy += 1) {
-        for (let xx = x0; xx < x1; xx += 1) {
-          const i = (yy * size + xx) * 4
-          px[i] = rgb[0]
-          px[i + 1] = rgb[1]
-          px[i + 2] = rgb[2]
-          px[i + 3] = 255
-        }
+    /** Paint `rgb` over the pixel at `x,y` with coverage `a` (0..1). */
+    blend(x, y, rgb, a) {
+      if (a <= 0) return
+      const i = (y * size + x) * 4
+      if (a >= 1) {
+        px[i] = rgb[0]
+        px[i + 1] = rgb[1]
+        px[i + 2] = rgb[2]
+        return
       }
+      px[i] += Math.round((rgb[0] - px[i]) * a)
+      px[i + 1] += Math.round((rgb[1] - px[i + 1]) * a)
+      px[i + 2] += Math.round((rgb[2] - px[i + 2]) * a)
     }
   }
 }
 
-/** Draw the mark at an arbitrary size. */
+/**
+ * Coverage of one rounded rectangle, sampled on an 8x8 grid inside each pixel.
+ *
+ * Only the four corners are ever fractional: the layout below keeps every
+ * straight edge on a whole pixel, so the flat sides stay as crisp as the rest
+ * of the chassis and the sampling is spent entirely on the two radii — which
+ * are the whole point of the shape.
+ */
+const SUB = 8
+
+function paintRounded(c, rgb, x, y, w, h, radii) {
+  // A radius can never eat more than half the box it turns.
+  const cap = Math.min(w, h) / 2
+  const [rTL, rTR, rBR, rBL] = radii.map((r) => Math.min(r, cap))
+
+  const inside = (px, py) => {
+    if (px < x || px > x + w || py < y || py > y + h) return false
+    let cx, cy, r
+    if (rTL && px < x + rTL && py < y + rTL) [cx, cy, r] = [x + rTL, y + rTL, rTL]
+    else if (rTR && px > x + w - rTR && py < y + rTR) [cx, cy, r] = [x + w - rTR, y + rTR, rTR]
+    else if (rBR && px > x + w - rBR && py > y + h - rBR)
+      [cx, cy, r] = [x + w - rBR, y + h - rBR, rBR]
+    else if (rBL && px < x + rBL && py > y + h - rBL) [cx, cy, r] = [x + rBL, y + h - rBL, rBL]
+    else return true
+    const dx = px - cx
+    const dy = py - cy
+    return dx * dx + dy * dy <= r * r
+  }
+
+  const x0 = Math.max(0, Math.floor(x))
+  const y0 = Math.max(0, Math.floor(y))
+  const x1 = Math.min(c.size, Math.ceil(x + w))
+  const y1 = Math.min(c.size, Math.ceil(y + h))
+
+  for (let py = y0; py < y1; py += 1) {
+    for (let px = x0; px < x1; px += 1) {
+      let hits = 0
+      for (let j = 0; j < SUB; j += 1) {
+        for (let i = 0; i < SUB; i += 1) {
+          if (inside(px + (i + 0.5) / SUB, py + (j + 0.5) / SUB)) hits += 1
+        }
+      }
+      c.blend(px, py, rgb, hits / (SUB * SUB))
+    }
+  }
+}
+
+/**
+ * The mark's layout at a given canvas size, in whole device pixels.
+ *
+ * Rounding here rather than at paint time is what keeps the stem, the gutter
+ * and the band on exact pixel boundaries. The gutter is the one measure with a
+ * floor: below one pixel it closes up, and the D becomes a blob.
+ */
+function layout(size) {
+  const pad = Math.max(1, Math.round(size * PAD))
+  const box = size - pad * 2
+  const gutter = Math.max(1, Math.round((box * GUTTER_W) / U))
+  // Whatever the gutter took comes out of the two panes, split in their own
+  // ratio, so the three of them still fill the box exactly.
+  const panes = box - gutter
+  const stem = Math.round((panes * STEM_W) / (STEM_W + BOWL_W))
+  const bowl = panes - stem
+  const band = Math.max(1, Math.round((box * BAND_H) / U))
+
+  return {
+    pad,
+    box,
+    stem,
+    gutter,
+    bowl,
+    band,
+    bandY: pad + Math.round((box - band) / 2),
+    rStem: (box * R_STEM) / U,
+    rBowl: (box * R_BOWL) / U
+  }
+}
+
+/** Draw the mark on the chassis ground at an arbitrary size. */
 function drawIcon(size) {
   const c = canvas(size)
   c.fill(CHASSIS)
 
-  // Padding and gutter scale with the icon, but never below one pixel — at
-  // 16px the gutter is what makes it read as four panes rather than a blob.
-  const pad = Math.max(1, Math.round(size * 0.14))
-  const gut = Math.max(1, Math.round(size * 0.055))
-  const box = size - pad * 2
+  const l = layout(size)
+  const bowlX = l.pad + l.stem + l.gutter
 
-  // The design's 1.24fr / 1fr columns, halved rows.
-  const colW = box - gut
-  const left = Math.round(colW * 0.554)
-  const right = colW - left
-  const rowH = box - gut
-  const top = Math.round(rowH / 2)
-  const bottom = rowH - top
-
-  const x0 = pad
-  const x1 = pad + left + gut
-  const y0 = pad
-  const y1 = pad + top + gut
-
-  c.rect(x0, y0, left, top, RED)
-  c.rect(x1, y0, right, top, SLATE)
-  c.rect(x0, y1, left, bottom, SLATE)
-  c.rect(x1, y1, right, bottom, SLATE_DIM)
+  // stem — left corners only
+  paintRounded(c, RED, l.pad, l.pad, l.stem, l.box, [l.rStem, 0, 0, l.rStem])
+  // bowl — right corners only
+  paintRounded(c, RED, bowlX, l.pad, l.bowl, l.box, [0, l.rBowl, l.rBowl, 0])
+  // The header rule, centred, spanning the whole bowl. It sits well inside the
+  // bowl's straight flank, so it needs no clipping to the radii.
+  paintRounded(c, LINE_STRONG, bowlX, l.bandY, l.bowl, l.band, [0, 0, 0, 0])
 
   return c
+}
+
+/**
+ * The same construction as vector geometry, for the surfaces that take an SVG.
+ *
+ * Drawn from the nominal 64-unit grid rather than a rounded pixel layout:
+ * there are no pixels to land on, so the true fractions are the honest ones.
+ */
+function drawSvg() {
+  const inset = U * PAD
+  const scale = (U - inset * 2) / U
+  const at = (v) => +(inset + v * scale).toFixed(3)
+  const of = (v) => +(v * scale).toFixed(3)
+
+  const rs = of(R_STEM)
+  const rb = of(R_BOWL)
+  const bowlX = at(STEM_W + GUTTER_W)
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${U}" height="${U}" viewBox="0 0 ${U} ${U}">`,
+    `  <rect width="${U}" height="${U}" fill="#0b0e13"></rect>`,
+    `  <path d="M${at(R_STEM)},${at(0)} H${at(STEM_W)} V${at(U)} H${at(R_STEM)} A${rs},${rs} 0 0 1 ${at(0)},${at(U - R_STEM)} V${at(R_STEM)} A${rs},${rs} 0 0 1 ${at(R_STEM)},${at(0)} Z" fill="#e5372a"></path>`,
+    `  <path d="M${bowlX},${at(0)} H${at(U - R_BOWL)} A${rb},${rb} 0 0 1 ${at(U)},${at(R_BOWL)} V${at(U - R_BOWL)} A${rb},${rb} 0 0 1 ${at(U - R_BOWL)},${at(U)} H${bowlX} Z" fill="#e5372a"></path>`,
+    `  <rect x="${bowlX}" y="${at((U - BAND_H) / 2)}" width="${of(BOWL_W)}" height="${of(BAND_H)}" fill="#2b3442"></rect>`,
+    `</svg>`,
+    ''
+  ].join('\n')
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +271,6 @@ function encodeIco(entries) {
     dir[at + 3] = 0 // reserved
     dir.writeUInt16LE(1, at + 4) // colour planes
     dir.writeUInt16LE(32, at + 6) // bits per pixel
-    dir.writeUInt32BE(0, at + 8)
     dir.writeUInt32LE(e.png.length, at + 8)
     dir.writeUInt32LE(offset, at + 12)
     offset += e.png.length
@@ -177,16 +283,30 @@ function encodeIco(entries) {
 
 const SIZES = [16, 24, 32, 48, 64, 128, 256]
 
-fs.mkdirSync(OUT, { recursive: true })
+fs.mkdirSync(BUILD, { recursive: true })
+fs.mkdirSync(PUBLIC, { recursive: true })
 
 const entries = SIZES.map((size) => ({ size, png: encodePng(drawIcon(size)) }))
-
 const ico = encodeIco(entries)
-fs.writeFileSync(path.join(OUT, 'icon.ico'), ico)
-console.log(`build/icon.ico   ${ico.length} bytes  (${SIZES.join(', ')})`)
 
-// electron-builder also uses a large PNG for some targets, and it is handy to
-// have one to look at.
+const wrote = (file, bytes, note) =>
+  console.log(`${file.padEnd(32)} ${String(bytes).padStart(6)} bytes  (${note})`)
+
+// electron-builder reads this one for the exe, the installer, the shortcuts
+// and the taskbar.
+fs.writeFileSync(path.join(BUILD, 'icon.ico'), ico)
+wrote('build/icon.ico', ico.length, SIZES.join(', '))
+
+// Some electron-builder targets want a large PNG instead, and it is the one to
+// look at when checking a change to the mark.
 const png = encodePng(drawIcon(512))
-fs.writeFileSync(path.join(OUT, 'icon.png'), png)
-console.log(`build/icon.png   ${png.length} bytes  (512)`)
+fs.writeFileSync(path.join(BUILD, 'icon.png'), png)
+wrote('build/icon.png', png.length, '512')
+
+// The renderer's own, for the tab `electron-vite dev` opens in a real browser.
+fs.writeFileSync(path.join(PUBLIC, 'favicon.ico'), ico)
+wrote('src/renderer/public/favicon.ico', ico.length, SIZES.join(', '))
+
+const svg = drawSvg()
+fs.writeFileSync(path.join(PUBLIC, 'favicon.svg'), svg)
+wrote('src/renderer/public/favicon.svg', svg.length, 'vector')

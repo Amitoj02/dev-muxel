@@ -43,6 +43,43 @@ body {
 }
 
 /* ==========================================================================
+   Brand
+   ========================================================================== */
+
+.brandmark {
+  display: block;
+  flex: none;
+  fill: var(--red);
+}
+
+.brandmark__rule {
+  fill: var(--line-strong);
+}
+
+.lockup {
+  display: flex;
+  align-items: center;
+}
+
+/* 0.86 keeps the cap height sitting on the mark's own edges; the tracking is
+   the wordmark's, and it is the only place in the app that tightens. */
+.lockup__word {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  line-height: 0.86;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.lockup__dev {
+  color: var(--ink-bright);
+}
+
+.lockup__lobby {
+  color: var(--red);
+}
+
+/* ==========================================================================
    Titlebar
    ========================================================================== */
 
@@ -59,23 +96,16 @@ body {
 .titlebar__brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   padding: 0 14px;
   -webkit-app-region: drag;
 }
 
-.titlebar__mark {
-  width: 11px;
-  height: 11px;
-  background: var(--red);
-  display: block;
-  flex: none;
-}
-
+/* The mark is at its 16px floor here, which is below the lockup's, so this is
+   the app's name beside it rather than the wordmark. */
 .titlebar__word {
-  font: 700 11px / 1 var(--font-ui);
-  letter-spacing: 0.16em;
-  color: var(--ink);
+  font: 500 12px / 1 var(--font-ui);
+  color: var(--ink-2);
 }
 
 .titlebar__rule {

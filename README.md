@@ -1,3 +1,5 @@
+<img src="brand-kit/icons/devlobby-128.png" alt="" width="64">
+
 # DevLobby
 
 **A repo-aware tiled workspace for terminals, browsers, and AI coding sessions.**

@@ -9,6 +9,8 @@
     "src/renderer/src/styles/fonts.css"
   ],
   "componentSrcMap": {
+    "BrandLockup": "src/renderer/src/components/BrandMark.tsx",
+    "BrandMark": "src/renderer/src/components/BrandMark.tsx",
     "BrowserPane": "src/renderer/src/components/BrowserPane.tsx",
     "CommentPopover": "src/renderer/src/components/PageComments.tsx",
     "CommentsPanel": "src/renderer/src/components/PageComments.tsx",

@@ -381,6 +381,12 @@ app.whenReady().then(async () => {
     preload: resolvePreload(__dirname),
     devServerUrl: process.env.ELECTRON_RENDERER_URL ?? null,
     rendererHtml: path.join(__dirname, '../renderer/index.html'),
+    // Packaged, the window and its taskbar button wear the executable's icon,
+    // which electron-builder stamped from build/icon.ico. Unpackaged the
+    // executable is electron.exe, so they wear Electron's — point them at the
+    // same .ico instead. It is not in `files`, and so not inside the asar,
+    // which is exactly why this is the unpackaged branch.
+    icon: app.isPackaged ? null : path.join(__dirname, '../../build/icon.ico'),
     bounds: store.getBounds(),
     onBoundsChanged: (bounds) => store.setBounds(bounds)
   })

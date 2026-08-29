@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { BrandMark } from './BrandMark'
 import { IconClose, IconMaximise, IconMinimise, IconPlus, IconRestore } from './Icons'
 import { MenuPopover } from './MenuPopover'
 import { NewTerminalMenu } from './NewTerminalMenu'
@@ -65,8 +66,8 @@ export function TitleBar(): React.JSX.Element {
   return (
     <header className="titlebar">
       <div className="titlebar__brand">
-        <span className="titlebar__mark" />
-        <span className="titlebar__word">DEVLOBBY</span>
+        <BrandMark size={16} />
+        <span className="titlebar__word">DevLobby</span>
       </div>
       <div className="titlebar__rule" />
 

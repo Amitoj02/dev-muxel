@@ -12,7 +12,7 @@ npm run dev              # electron-vite dev server, hot reload
 npm run build            # typecheck + bundle to out/
 npm run build:unpacked   # release/<version>/win-unpacked/, no installer
 npm run build:win        # installer + portable
-npm run icon             # regenerate build/icon.ico
+npm run icon             # redraw the icon and the renderer's favicons
 ```
 
 `devlobby.cmd` runs the built output through Electron's own signed binary,
@@ -238,6 +238,38 @@ Space Grotesk and JetBrains Mono are vendored as variable woff2 (~97 KB total)
 so the renderer never touches the network and the CSP can stay strict.
 Regenerate with `npm run fonts`; their SIL OFL 1.1 licences are in
 [`licenses/`](./licenses).
+
+## Brand
+
+[`brand-kit/`](./brand-kit) is the reference: the mark's construction, the
+lockups, the clear space, the minimum sizes and the whole icon set, with
+`DevLobby-Brand-Guide.html` as the page that explains them. Open that before
+changing anything the app shows as a logo.
+
+The mark is a `D` built out of the product — a narrow pane, the gutter between
+them, and a wide pane crossed by its header rule — drawn on a 64-unit grid with
+two radii, `r7.5` on the stem and `r17.5` on the bowl. That asymmetry is what
+makes it read as a letter at 16px, and it is the one place the system's square
+corners do not apply.
+
+Every measure is a fraction of the canvas, so nothing needs a design tool to
+regenerate. `npm run icon` redraws all of it from those fractions:
+
+| File | Who reads it |
+|---|---|
+| `build/icon.ico` | electron-builder — the exe, installer, shortcuts, taskbar |
+| `build/icon.png` | the large electron-builder targets, and eyeballing a change |
+| `src/renderer/public/favicon.{ico,svg}` | the tab `npm run dev` opens in a browser |
+
+Each of the seven sizes in the `.ico` gets its own layout rather than being
+downscaled from one bitmap, so the gutter is never allowed below one pixel —
+at 16px it is exactly one, which is the floor the brand gives the mark.
+
+In the app itself the mark is `BrandMark`, whose paths are `brand-kit/svg/mark.svg`
+verbatim. `BrandLockup` pairs it with the wordmark at the brand's own ratios
+(gap `0.28`, wordmark `0.72` of the mark), which is why the titlebar carries a
+plain app name beside a 16px mark instead: below a 24px mark the lockup is not
+allowed, and the mark stands alone.
 
 ## Known rough edges
 
