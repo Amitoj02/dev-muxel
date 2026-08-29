@@ -1,6 +1,6 @@
-# Contributing to DevMuxel
+# Contributing to DevLobby
 
-Thanks for looking. DevMuxel is a small, deliberate codebase: one screen, no
+Thanks for looking. DevLobby is a small, deliberate codebase: one screen, no
 router, no state library, and a short list of dependencies. The notes below are
 what you need before changing anything in it.
 
@@ -15,7 +15,7 @@ npm run build:win        # installer + portable
 npm run icon             # regenerate build/icon.ico
 ```
 
-`dev-muxel.cmd` runs the built output through Electron's own signed binary,
+`devlobby.cmd` runs the built output through Electron's own signed binary,
 which is handy on machines where Smart App Control blocks the packaged exe.
 
 ## How it is put together
@@ -23,7 +23,7 @@ which is handy on machines where Smart App Control blocks the packaged exe.
 ```
 src/shared/     types, the IPC channel list, the pure layout engine, and the
                 pure half of the browser pane (browser.ts, claude.ts)
-resources/      the /devmuxel-browser skill, shipped with the app and
+resources/      the /devlobby-browser skill, shipped with the app and
                 inlined into the main bundle with `?raw`
 src/main/       ptys, git, the filesystem, the window, menu accelerators, and
                 the browser guests' debugger and hardening (main/browser/)
@@ -71,7 +71,7 @@ arbitrary subset of what you pressed. Accelerators are evaluated before the key
 reaches the page. The menu itself is never drawn. `src/main/menu.ts` owns the
 bindings; `src/renderer/src/lib/useShortcuts.ts` turns an action name into a
 change in the grid, and `src/renderer/src/lib/chords.ts` is the shared list of
-what DevMuxel claims — every chord there has to be refused by xterm too, or it
+what DevLobby claims — every chord there has to be refused by xterm too, or it
 never reaches the window.
 
 **Closing something parks it rather than killing it.** For five seconds a
@@ -121,9 +121,9 @@ not a security boundary. That hardening lives in `src/main/browser/guest.ts`
 and is the first thing to read before changing anything about guests.
 
 Comments go the other way round from everything else here, and that is the
-point of them. DevMuxel does not push them at a session; a session comes and
-asks. `/devmuxel-browser` runs a script that talks to the running app over a
-loopback port DevMuxel publishes in `bridge.json` — a running Electron app
+point of them. DevLobby does not push them at a session; a session comes and
+asks. `/devlobby-browser` runs a script that talks to the running app over a
+loopback port DevLobby publishes in `bridge.json` — a running Electron app
 cannot be driven by pointing at its executable, so it listens instead, on a
 port the OS picks behind a token generated fresh each launch, with the manifest
 removed on the way out. One waiter at a time, because two sessions holding the
@@ -157,7 +157,7 @@ whatever is running in that pane.
 For the same reason a capture is only pasted in whole when three things hold at
 once, and any one of them failing sends it to a file instead:
 
-- DevMuxel itself typed a `claude` command into that pane **and pressed
+- DevLobby itself typed a `claude` command into that pane **and pressed
   Enter** — recorded as `ranStartup` on the pane's runtime. A repository's command on
   open is typed into every terminal whether or not "press Enter for me" is
   set, and a restored pane does not replay it at all, so the configuration
@@ -210,10 +210,12 @@ real repositories in every state a header can show. `scripts/check-browser.mts`
 asserts the browser pane's pure half: what the URL bar will and will not load,
 the CDP-to-log reducer including redirect chains and the ring buffer, and the
 exact text sent to Claude — including the credentials it takes out of it.
-`scripts/check-migrate.mts` asserts the one-time move of a pre-rename `GRID`
-profile onto the DevMuxel name: that everything comes across, that the browser
-partition follows `BROWSER_PARTITION`, that a profile already under the new
-name is never clobbered, and that re-running it changes nothing. All four run
+`scripts/check-migrate.mts` asserts the move of a profile written under either
+earlier name — the app has been `GRID`, then `DevMuxel` — onto the DevLobby
+name: that everything comes across from whichever one an install is sitting at,
+that the browser partition follows `BROWSER_PARTITION`, that where both are
+present the newer wins and the older only fills gaps, that a profile already
+under the new name is never clobbered, and that re-running it changes nothing. All four run
 under Node's type stripping, so there is no build step.
 
 That last one is why `src/shared/browser.ts` and `src/shared/claude.ts` import
@@ -242,7 +244,7 @@ Regenerate with `npm run fonts`; their SIL OFL 1.1 licences are in
 **node-pty prints `Error: AttachConsole failed` on every pane close.** Its
 console-process-list helper is broken on Windows 11 build 26200 and dies
 immediately. It is noise, not a failure — the pty is killed correctly, and
-DevMuxel force-reaps the process tree 1.5s later in case a grandchild allocated
+DevLobby force-reaps the process tree 1.5s later in case a grandchild allocated
 its own console.
 
 **`npmRebuild` is off and must stay off.** node-pty 1.1.0 ships N-API prebuilds,

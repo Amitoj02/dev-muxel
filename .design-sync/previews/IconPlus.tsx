@@ -1,4 +1,4 @@
-import { IconPlus } from 'dev-muxel'
+import { IconPlus } from 'devlobby'
 
 /** Titlebar — new terminal, new tab */
 export const Default = (): React.JSX.Element => (

@@ -1,8 +1,8 @@
-import type { DevMuxelApi } from './index'
+import type { DevLobbyApi } from './index'
 
 declare global {
   interface Window {
-    devmuxel: DevMuxelApi
+    devlobby: DevLobbyApi
   }
 }
 

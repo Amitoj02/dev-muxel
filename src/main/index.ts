@@ -19,7 +19,7 @@ import { CaptureStash } from './browser/stash'
 import { hardenGuest, prepareGuestSession } from './browser/guest'
 import { installSkill, skillStatus } from './browser/skill'
 import { buildMenu } from './menu'
-import { migrateFromGrid } from './migrate'
+import { LEGACY_APP_NAMES, migrateProfile } from './migrate'
 import { GitWatcher } from './git/watcher'
 import { probeRepo, scanForRepos } from './git/status'
 import { editorAvailable, openInEditor, openInFileManager } from './integrations/editor'
@@ -30,11 +30,14 @@ import { createWindow, resolvePreload } from './window'
 
 // Must run before anything reads app.getPath('userData'), which cascades into
 // sessionData and logs.
-app.setName('DevMuxel')
+app.setName('DevLobby')
 
 // And this before anything *opens* a file in there. An install that predates
-// the rename still has its whole profile under the old name; see migrate.ts.
-migrateFromGrid(path.join(app.getPath('appData'), 'GRID'), app.getPath('userData'))
+// either rename still has its whole profile under an old name; see migrate.ts.
+migrateProfile(
+  LEGACY_APP_NAMES.map((name) => path.join(app.getPath('appData'), name)),
+  app.getPath('userData')
+)
 
 // A second launch should raise the window you already have, not open a
 // duplicate grid fighting over the same state file.
@@ -255,7 +258,7 @@ function registerIpc(): void {
     taken: bridge.deliver({ ...batch, text: formatComments(batch) })
   }))
 
-  // --- the /devmuxel-browser skill -------------------------------------------
+  // --- the /devlobby-browser skill -------------------------------------------
   // The other half of the bridge above, shipped with the app so the two cannot
   // drift apart. Installing it is always something the user pressed a button
   // for; nothing here writes to their home directory on its own.
@@ -276,13 +279,13 @@ function registerIpc(): void {
 
   /**
    * Panes shout at the taskbar, not just at the in-app titlebar. The whole
-   * point of DevMuxel is running agents while you do something else, so the
+   * point of DevLobby is running agents while you do something else, so the
    * moment that matters is the one where the window is *not* on top.
    */
   ipcMain.on(CH.winAttention, (_e, count: number) => {
     if (!win || win.isDestroyed()) return
     const waiting = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0
-    win.setTitle(waiting > 0 ? `${waiting} waiting - DevMuxel` : 'DevMuxel')
+    win.setTitle(waiting > 0 ? `${waiting} waiting - DevLobby` : 'DevLobby')
     // Flashing a focused window is just noise; Windows ignores it anyway.
     win.flashFrame(waiting > 0 && !win.isFocused())
   })
@@ -348,7 +351,7 @@ app.whenReady().then(async () => {
     acknowledge: (batch) => win?.webContents.send(EV.browserCommentsTaken, batch),
     onWaiting: (waiting) => win?.webContents.send(EV.browserWaiting, waiting)
   })
-  // A failure here costs the /devmuxel-browser skill and nothing else, so it is
+  // A failure here costs the /devlobby-browser skill and nothing else, so it is
   // reported rather than allowed to stop the app coming up.
   await bridge.start().catch((err) => {
     console.error('[main] the browser bridge could not start:', err)

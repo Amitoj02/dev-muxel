@@ -1,10 +1,11 @@
 /**
- * Checks the one-time GRID -> DevMuxel profile migration.
+ * Checks the profile migration across both renames, GRID -> DevMuxel -> DevLobby.
  *
  * It runs before anything opens a file in userData, on every launch, against a
- * directory holding the user's repositories and layout — so the two things
- * worth asserting are that it moves everything across exactly once, and that
- * it never destroys a profile that is already there.
+ * directory holding the user's repositories and layout — so the things worth
+ * asserting are that it moves everything across exactly once, from whichever
+ * old name the install is sitting at, and that it never destroys a profile that
+ * is already there.
  *
  *   npm run check:migrate
  *
@@ -14,7 +15,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { legacySkillDir, migrateFromGrid } from '../src/main/migrate.ts'
+import { LEGACY_APP_NAMES, legacySkillDirs, migrateProfile } from '../src/main/migrate.ts'
 
 let failures = 0
 function check(name: string, ok: boolean): void {
@@ -23,118 +24,205 @@ function check(name: string, ok: boolean): void {
 }
 
 function tmp(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'muxmig-'))
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'lobbymig-'))
 }
 
-function seedOldProfile(dir: string): void {
+/** A profile as some earlier version of the app left it. */
+function seedProfile(dir: string, slug: string, marker: string): void {
   fs.mkdirSync(dir, { recursive: true })
-  fs.writeFileSync(path.join(dir, 'grid-state.json'), '{"repos":["atlas-api"]}')
-  fs.writeFileSync(path.join(dir, 'grid-state.bak.json'), '{"repos":[]}')
+  fs.writeFileSync(path.join(dir, `${slug}-state.json`), `{"repos":["${marker}"]}`)
+  fs.writeFileSync(path.join(dir, `${slug}-state.bak.json`), '{"repos":[]}')
   fs.writeFileSync(path.join(dir, 'window.json'), '{"width":1440}')
   fs.mkdirSync(path.join(dir, 'captures'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'captures', 'a.md'), 'a capture')
-  fs.mkdirSync(path.join(dir, 'Partitions', 'grid-browser'), { recursive: true })
-  fs.writeFileSync(path.join(dir, 'Partitions', 'grid-browser', 'Cookies'), 'session=1')
+  fs.writeFileSync(path.join(dir, 'captures', `${marker}.md`), `a ${marker} capture`)
+  fs.mkdirSync(path.join(dir, 'Partitions', `${slug}-browser`), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'Partitions', `${slug}-browser`, 'Cookies'), `session=${marker}`)
 }
 
 const read = (p: string): string => fs.readFileSync(p, 'utf8')
 const has = (p: string): boolean => fs.existsSync(p)
 
-// --- 1. the ordinary upgrade: old profile, no new one ------------------------
+/** What the app itself passes, so the test exercises the real precedence. */
+function oldDirs(base: string): string[] {
+  return LEGACY_APP_NAMES.map((name) => path.join(base, name))
+}
+
+// --- 1. the ordinary upgrade from DevMuxel -----------------------------------
 {
   const base = tmp()
-  const oldDir = path.join(base, 'GRID')
-  const newDir = path.join(base, 'DevMuxel')
-  seedOldProfile(oldDir)
+  const newDir = path.join(base, 'DevLobby')
+  seedProfile(path.join(base, 'DevMuxel'), 'devmuxel', 'atlas-api')
 
-  migrateFromGrid(oldDir, newDir)
+  migrateProfile(oldDirs(base), newDir)
 
-  check('move: the old profile is gone', !has(oldDir))
-  check('move: state arrives under the new name', has(path.join(newDir, 'devmuxel-state.json')))
-  check('move: and keeps its contents', read(path.join(newDir, 'devmuxel-state.json')).includes('atlas-api'))
-  check('move: the backup is renamed too', has(path.join(newDir, 'devmuxel-state.bak.json')))
-  check('move: no old state name survives', !has(path.join(newDir, 'grid-state.json')))
-  check('move: window bounds come across untouched', read(path.join(newDir, 'window.json')).includes('1440'))
-  check('move: captures come across', read(path.join(newDir, 'captures', 'a.md')) === 'a capture')
+  check('devmuxel: the old profile is gone', !has(path.join(base, 'DevMuxel')))
+  check('devmuxel: state arrives under the new name', has(path.join(newDir, 'devlobby-state.json')))
   check(
-    'move: the browser partition follows BROWSER_PARTITION',
-    read(path.join(newDir, 'Partitions', 'devmuxel-browser', 'Cookies')) === 'session=1'
+    'devmuxel: and keeps its contents',
+    read(path.join(newDir, 'devlobby-state.json')).includes('atlas-api')
   )
-  check('move: the old partition name is gone', !has(path.join(newDir, 'Partitions', 'grid-browser')))
+  check('devmuxel: the backup is renamed too', has(path.join(newDir, 'devlobby-state.bak.json')))
+  check('devmuxel: no old state name survives', !has(path.join(newDir, 'devmuxel-state.json')))
+  check(
+    'devmuxel: window bounds come across untouched',
+    read(path.join(newDir, 'window.json')).includes('1440')
+  )
+  check(
+    'devmuxel: captures come across',
+    read(path.join(newDir, 'captures', 'atlas-api.md')) === 'a atlas-api capture'
+  )
+  check(
+    'devmuxel: the browser partition follows BROWSER_PARTITION',
+    read(path.join(newDir, 'Partitions', 'devlobby-browser', 'Cookies')) === 'session=atlas-api'
+  )
+  check(
+    'devmuxel: the old partition name is gone',
+    !has(path.join(newDir, 'Partitions', 'devmuxel-browser'))
+  )
 }
 
-// --- 2. nothing to migrate ---------------------------------------------------
+// --- 2. an install that never left GRID --------------------------------------
 {
   const base = tmp()
-  const newDir = path.join(base, 'DevMuxel')
-  fs.mkdirSync(newDir, { recursive: true })
-  fs.writeFileSync(path.join(newDir, 'devmuxel-state.json'), '{"fresh":true}')
+  const newDir = path.join(base, 'DevLobby')
+  seedProfile(path.join(base, 'GRID'), 'grid', 'atlas-api')
 
-  migrateFromGrid(path.join(base, 'GRID'), newDir)
+  migrateProfile(oldDirs(base), newDir)
 
-  check('fresh: an install with no GRID profile is untouched', read(path.join(newDir, 'devmuxel-state.json')).includes('fresh'))
+  check('grid: the old profile is gone', !has(path.join(base, 'GRID')))
+  check(
+    'grid: state arrives under the new name, skipping the middle one',
+    read(path.join(newDir, 'devlobby-state.json')).includes('atlas-api')
+  )
+  check('grid: the backup is renamed too', has(path.join(newDir, 'devlobby-state.bak.json')))
+  check('grid: no old state name survives', !has(path.join(newDir, 'grid-state.json')))
+  check(
+    'grid: the browser partition comes across',
+    read(path.join(newDir, 'Partitions', 'devlobby-browser', 'Cookies')) === 'session=atlas-api'
+  )
 }
 
-// --- 3. both exist: a real DevMuxel profile must win -------------------------
+// --- 3. both old names present: the newer one wins ---------------------------
+// Only reachable if the GRID hop half-failed or an old build was re-run, but it
+// is exactly the case where picking the wrong one silently loses recent work.
 {
   const base = tmp()
-  const oldDir = path.join(base, 'GRID')
-  const newDir = path.join(base, 'DevMuxel')
-  seedOldProfile(oldDir)
+  const newDir = path.join(base, 'DevLobby')
+  seedProfile(path.join(base, 'DevMuxel'), 'devmuxel', 'newer')
+  seedProfile(path.join(base, 'GRID'), 'grid', 'older')
+  fs.writeFileSync(path.join(base, 'GRID', 'only-in-grid.json'), '{"kept":true}')
+
+  migrateProfile(oldDirs(base), newDir)
+
+  check(
+    'both: the DevMuxel state is the one that takes the new name',
+    read(path.join(newDir, 'devlobby-state.json')).includes('newer')
+  )
+  check(
+    'both: the DevMuxel partition is the one that survives',
+    read(path.join(newDir, 'Partitions', 'devlobby-browser', 'Cookies')) === 'session=newer'
+  )
+  check(
+    'both: what only GRID had is still taken',
+    read(path.join(newDir, 'only-in-grid.json')).includes('kept')
+  )
+  check('both: the DevMuxel directory is taken wholesale', !has(path.join(base, 'DevMuxel')))
+  // GRID stays, holding only what DevMuxel had already superseded. The merge is
+  // one level deep and never deletes, so a directory the newer profile also had
+  // — `captures/`, `Partitions/` — is left where it is rather than merged into
+  // it or overwritten with it. Nothing is lost; it is simply not carried.
+  check(
+    'both: what GRID had that was superseded is left, not destroyed',
+    read(path.join(base, 'GRID', 'captures', 'older.md')) === 'a older capture'
+  )
+}
+
+// --- 4. nothing to migrate ---------------------------------------------------
+{
+  const base = tmp()
+  const newDir = path.join(base, 'DevLobby')
   fs.mkdirSync(newDir, { recursive: true })
-  fs.writeFileSync(path.join(newDir, 'devmuxel-state.json'), '{"repos":["newer"]}')
+  fs.writeFileSync(path.join(newDir, 'devlobby-state.json'), '{"fresh":true}')
+
+  migrateProfile(oldDirs(base), newDir)
+
+  check(
+    'fresh: an install with no earlier profile is untouched',
+    read(path.join(newDir, 'devlobby-state.json')).includes('fresh')
+  )
+}
+
+// --- 5. both exist: a real DevLobby profile must win -------------------------
+{
+  const base = tmp()
+  const newDir = path.join(base, 'DevLobby')
+  seedProfile(path.join(base, 'DevMuxel'), 'devmuxel', 'atlas-api')
+  fs.mkdirSync(newDir, { recursive: true })
+  fs.writeFileSync(path.join(newDir, 'devlobby-state.json'), '{"repos":["newest"]}')
   fs.writeFileSync(path.join(newDir, 'window.json'), '{"width":900}')
 
-  migrateFromGrid(oldDir, newDir)
+  migrateProfile(oldDirs(base), newDir)
 
-  check('merge: the newer state file is not clobbered', read(path.join(newDir, 'devmuxel-state.json')).includes('newer'))
-  check('merge: nor are newer window bounds', read(path.join(newDir, 'window.json')).includes('900'))
-  check('merge: but what was missing is taken', read(path.join(newDir, 'captures', 'a.md')) === 'a capture')
   check(
-    'merge: including the partition',
-    has(path.join(newDir, 'Partitions', 'devmuxel-browser', 'Cookies'))
+    'merge: the newer state file is not clobbered',
+    read(path.join(newDir, 'devlobby-state.json')).includes('newest')
   )
+  check('merge: nor are newer window bounds', read(path.join(newDir, 'window.json')).includes('900'))
+  check(
+    'merge: but what was missing is taken',
+    read(path.join(newDir, 'captures', 'atlas-api.md')) === 'a atlas-api capture'
+  )
+  check('merge: including the partition', has(path.join(newDir, 'Partitions', 'devlobby-browser', 'Cookies')))
   // The old state file comes across under its old name and stays there, because
   // the newer one already holds the name it would be renamed to. Left rather
   // than deleted: it is the user's data, and nothing reads it any more.
-  check('merge: the superseded state file is kept, not destroyed', has(path.join(newDir, 'grid-state.json')))
+  check('merge: the superseded state file is kept, not destroyed', has(path.join(newDir, 'devmuxel-state.json')))
 
-  migrateFromGrid(oldDir, newDir)
-  check('merge: re-running still does not clobber', read(path.join(newDir, 'devmuxel-state.json')).includes('newer'))
+  migrateProfile(oldDirs(base), newDir)
+  check(
+    'merge: re-running still does not clobber',
+    read(path.join(newDir, 'devlobby-state.json')).includes('newest')
+  )
 }
 
-// --- 4. re-running is a no-op ------------------------------------------------
+// --- 6. re-running is a no-op ------------------------------------------------
 {
   const base = tmp()
-  const oldDir = path.join(base, 'GRID')
-  const newDir = path.join(base, 'DevMuxel')
-  seedOldProfile(oldDir)
-  migrateFromGrid(oldDir, newDir)
-  const first = read(path.join(newDir, 'devmuxel-state.json'))
-  migrateFromGrid(oldDir, newDir)
-  migrateFromGrid(oldDir, newDir)
-  check('idempotent: a second and third run change nothing', read(path.join(newDir, 'devmuxel-state.json')) === first)
+  const newDir = path.join(base, 'DevLobby')
+  seedProfile(path.join(base, 'DevMuxel'), 'devmuxel', 'atlas-api')
+  migrateProfile(oldDirs(base), newDir)
+  const first = read(path.join(newDir, 'devlobby-state.json'))
+  migrateProfile(oldDirs(base), newDir)
+  migrateProfile(oldDirs(base), newDir)
+  check(
+    'idempotent: a second and third run change nothing',
+    read(path.join(newDir, 'devlobby-state.json')) === first
+  )
 }
 
-// --- 5. it must never throw --------------------------------------------------
+// --- 7. it must never throw --------------------------------------------------
 {
   let threw = false
   try {
-    migrateFromGrid('\0::not-a-path', '\0::also-not')
+    migrateProfile(['\0::not-a-path'], '\0::also-not')
     const base = tmp()
-    migrateFromGrid(path.join(base, 'GRID'), path.join(base, 'GRID')) // same dir
+    migrateProfile([path.join(base, 'GRID')], path.join(base, 'GRID')) // same dir
+    migrateProfile([], path.join(base, 'DevLobby')) // nothing to carry
   } catch {
     threw = true
   }
   check('safety: a broken path is swallowed, not thrown', !threw)
 }
 
-// --- 6. the legacy skill location -------------------------------------------
+// --- 8. the legacy skill locations -------------------------------------------
 {
-  const dir = legacySkillDir('C:\\Users\\me')
+  const dirs = legacySkillDirs('C:\\Users\\me')
+  const base = path.join('C:\\Users\\me', '.claude', 'skills')
   check(
-    'legacy: names the pre-rename skill folder',
-    dir === path.join('C:\\Users\\me', '.claude', 'skills', 'grid-browser')
+    'legacy: names both pre-rename skill folders, newest first',
+    dirs.length === 2 &&
+      dirs[0] === path.join(base, 'devmuxel-browser') &&
+      dirs[1] === path.join(base, 'grid-browser')
   )
 }
 

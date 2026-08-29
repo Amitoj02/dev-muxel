@@ -1,4 +1,4 @@
-import { IconBranch } from 'dev-muxel'
+import { IconBranch } from 'devlobby'
 
 /** Pane header — the branch chip */
 export const Default = (): React.JSX.Element => (

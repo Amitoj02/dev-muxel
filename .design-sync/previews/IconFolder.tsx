@@ -1,4 +1,4 @@
-import { IconFolder } from 'dev-muxel'
+import { IconFolder } from 'devlobby'
 
 /** Menus — choose a folder */
 export const Default = (): React.JSX.Element => (

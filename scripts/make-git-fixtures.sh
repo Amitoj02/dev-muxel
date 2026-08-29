@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build git fixtures covering every state DevMuxel's pane header can render.
+# Build git fixtures covering every state DevLobby's pane header can render.
 set -e
 ROOT="$1"
 rm -rf "$ROOT"
 mkdir -p "$ROOT"
 cd "$ROOT"
 
-export GIT_AUTHOR_NAME=devmuxel GIT_AUTHOR_EMAIL=devmuxel@example.com
-export GIT_COMMITTER_NAME=devmuxel GIT_COMMITTER_EMAIL=devmuxel@example.com
+export GIT_AUTHOR_NAME=devlobby GIT_AUTHOR_EMAIL=devlobby@example.com
+export GIT_COMMITTER_NAME=devlobby GIT_COMMITTER_EMAIL=devlobby@example.com
 
 git init --bare -q remote.git
 

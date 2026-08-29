@@ -116,7 +116,7 @@ export function runAction(action: string): void {
     case 'open-editor': {
       const pane = state.panes.find((p) => p.id === focused)
       if (pane?.kind === 'terminal') {
-        void window.devmuxel.open.editor(pane.cwd).then((r) => {
+        void window.devlobby.open.editor(pane.cwd).then((r) => {
           if (!r.ok) actions.toast(r.error ?? 'Could not open VS Code', 'error')
         })
       }
@@ -230,7 +230,7 @@ function actionForChord(e: KeyboardEvent): string | null {
 
 export function useShortcuts(): void {
   useEffect(() => {
-    const off = window.devmuxel.on.menuAction((action) => runAction(action))
+    const off = window.devlobby.on.menuAction((action) => runAction(action))
 
     // Fallback for anything the accelerator misses. Escape is deliberately not
     // bound anywhere: Claude, vim and fzf all need it, and dialogs close on it

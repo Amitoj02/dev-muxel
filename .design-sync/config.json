@@ -1,6 +1,6 @@
 {
-  "pkg": "dev-muxel",
-  "globalName": "DevMuxel",
+  "pkg": "devlobby",
+  "globalName": "DevLobby",
   "shape": "package",
   "srcDir": "src/renderer/src/components",
   "tsconfig": "tsconfig.web.json",

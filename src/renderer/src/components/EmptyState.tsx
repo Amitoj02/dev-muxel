@@ -14,16 +14,16 @@ export function EmptyState(): React.JSX.Element {
   const hasRepos = app.repos.length > 0
 
   const addFirst = async (): Promise<void> => {
-    const picked = await window.devmuxel.dialog.pickFolder('Add a repository')
+    const picked = await window.devlobby.dialog.pickFolder('Add a repository')
     if (!picked) return
-    const probe = await window.devmuxel.repo.probe(picked)
+    const probe = await window.devlobby.repo.probe(picked)
     const repo = actions.addRepo({ name: probe.name, path: probe.root ?? picked })
     if (repo) actions.addTerminal({ repoId: repo.id })
   }
 
   return (
     <div className="empty">
-      <span className="empty__kicker">DEVMUXEL</span>
+      <span className="empty__kicker">DEVLOBBY</span>
 
       {hasRepos ? (
         <>
@@ -52,7 +52,7 @@ export function EmptyState(): React.JSX.Element {
         </>
       ) : (
         <>
-          <h1 className="empty__title">Point DevMuxel at the repositories you work in.</h1>
+          <h1 className="empty__title">Point DevLobby at the repositories you work in.</h1>
           <p className="empty__hint">
             Each one gets a terminal that knows its branch and how dirty its tree is. Drag panes
             around to build the grid you want, and drop a folder anywhere on this window to add it.

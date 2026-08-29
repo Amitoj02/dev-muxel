@@ -48,7 +48,7 @@ export type TerminalPane = {
   startupCommand?: string
   /**
    * Press Enter on this pane's own `startupCommand`, overriding the repo's
-   * `runOnOpen`. Set when DevMuxel opened the terminal to run something
+   * `runOnOpen`. Set when DevLobby opened the terminal to run something
    * specific — a Claude session started from a browser pane's network log, say.
    */
   runStartup?: boolean
@@ -165,7 +165,7 @@ export type ShellProfile = {
   args: string[]
   /** Extra env layered on top of process.env. */
   env?: Record<string, string>
-  /** True when DevMuxel discovered it rather than the user adding it. */
+  /** True when DevLobby discovered it rather than the user adding it. */
   builtin?: boolean
 }
 
@@ -219,7 +219,7 @@ export type Settings = {
    */
   browserCaptureBodies: boolean
   /**
-   * Model and effort DevMuxel opens a Claude session with when it starts one
+   * Model and effort DevLobby opens a Claude session with when it starts one
    * for you. Empty means "whatever the CLI defaults to". A session that is
    * already running always wins over these: it was started with its own flags,
    * and pasting into it cannot change them.
@@ -311,8 +311,8 @@ export type PtyDataEvent = {
 }
 
 /**
- * Whether the `/devmuxel-browser` skill is installed for the user, and whether
- * it is the one this build of DevMuxel ships. A copy with no version stamp was
+ * Whether the `/devlobby-browser` skill is installed for the user, and whether
+ * it is the one this build of DevLobby ships. A copy with no version stamp was
  * written by hand and counts as out of date — see `main/browser/skill.ts`.
  */
 export type SkillStatus = {
@@ -322,10 +322,11 @@ export type SkillStatus = {
   /** Where it is, or would go, so the UI can name it. */
   dir: string
   /**
-   * The pre-rename `/grid-browser` skill, if it is still on disk. Named so the
-   * user can delete it; installing the new one does not touch it.
+   * The pre-rename `/devmuxel-browser` and `/grid-browser` skills, whichever
+   * are still on disk. Named so the user can delete them; installing the new
+   * one does not touch them.
    */
-  legacyDir: string | null
+  legacyDirs: string[]
 }
 
 export type RepoScanResult = {

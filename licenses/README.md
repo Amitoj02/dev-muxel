@@ -1,6 +1,6 @@
 # Third-party licences
 
-DevMuxel vendors two fonts as variable woff2 files under
+DevLobby vendors two fonts as variable woff2 files under
 `src/renderer/src/styles/fonts/`. Both are SIL Open Font License 1.1, which
 permits bundling with an application provided the licence travels with them.
 
@@ -12,5 +12,5 @@ permits bundling with an application provided the licence travels with them.
 Neither declares a Reserved Font Name, so the OFL's renaming clause does not
 apply. Regenerate the font files with `npm run fonts`.
 
-Everything else DevMuxel ships is either its own code (MIT, see the repository
+Everything else DevLobby ships is either its own code (MIT, see the repository
 root) or an npm dependency under its own licence.

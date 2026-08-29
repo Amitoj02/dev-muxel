@@ -1,4 +1,4 @@
-import { NewTerminalMenu } from 'dev-muxel'
+import { NewTerminalMenu } from 'devlobby'
 
 const noop = (): void => {}
 

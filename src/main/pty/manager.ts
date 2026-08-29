@@ -1,5 +1,5 @@
 /**
- * The pty side of DevMuxel.
+ * The pty side of DevLobby.
  *
  * One ConPTY per terminal pane. Two things here are worth more than they look:
  *
@@ -32,7 +32,7 @@ const LOW_WATER = 256 * 1024
 export type PtyEvents = {
   onData: (paneId: string, data: string, seq: number) => void
   /**
-   * `solicited` is true when DevMuxel asked for the kill, so the UI can stay
+   * `solicited` is true when DevLobby asked for the kill, so the UI can stay
    * quiet.
    */
   onExit: (paneId: string, exitCode: number, solicited: boolean) => void
@@ -74,8 +74,8 @@ export class PtyManager {
    * Environment variables that say "you are inside a running Claude Code
    * session", stripped from every pane's shell.
    *
-   * DevMuxel exists to run CLI sessions, so it is routinely launched *from* one
-   * — a terminal, a script, another agent. Whatever started DevMuxel, its
+   * DevLobby exists to run CLI sessions, so it is routinely launched *from* one
+   * — a terminal, a script, another agent. Whatever started DevLobby, its
    * markers are inherited by the Electron process and would otherwise be copied
    * into every pane, where a fresh `claude` reads them and believes it is a
    * child of that other session: it stops saving its transcript, and it is
@@ -99,11 +99,11 @@ export class PtyManager {
    * Descriptions of somebody else's output, stripped for the same reason.
    *
    * A parent that captures its children's output sets `NO_COLOR` so it gets
-   * plain text — Claude Code does exactly this. Inherited by DevMuxel and
+   * plain text — Claude Code does exactly this. Inherited by DevLobby and
    * handed down, it tells every CLI in every pane that the terminal it is
    * drawing into cannot do colour, which is untrue: this is a real pty, and
-   * DevMuxel has just told it so with `TERM=xterm-256color`. The variable
-   * describes the pipe that launched DevMuxel, not the terminal DevMuxel made.
+   * DevLobby has just told it so with `TERM=xterm-256color`. The variable
+   * describes the pipe that launched DevLobby, not the terminal DevLobby made.
    *
    * A user who genuinely wants colourless panes still has somewhere to say so
    * — a shell profile's own `env`, which is merged after this and therefore
@@ -124,7 +124,7 @@ export class PtyManager {
     for (const [k, v] of Object.entries(process.env)) {
       if (typeof v === 'string') env[k] = v
     }
-    // Three layers, in the order of who should win. First, what DevMuxel
+    // Three layers, in the order of who should win. First, what DevLobby
     // inherited, minus everything that describes the process that launched it
     // rather than the terminal being made here.
     //
@@ -138,10 +138,10 @@ export class PtyManager {
     // something specific — including anything stripped above.
     Object.assign(env, shell.env ?? {})
 
-    // Last, the two facts only DevMuxel can state. Nothing may override these:
+    // Last, the two facts only DevLobby can state. Nothing may override these:
     // the pane id is how output finds its way home.
-    env.TERM_PROGRAM = 'devmuxel'
-    env.DEVMUXEL_PANE = paneId
+    env.TERM_PROGRAM = 'devlobby'
+    env.DEVLOBBY_PANE = paneId
 
     const pty = spawnPty(shell.path, shell.args ?? [], {
       name: 'xterm-256color',
@@ -324,7 +324,7 @@ export class PtyManager {
  *
  * `process.kill(pid, 0)` is the liveness probe; taskkill /T /F is the only
  * reliable way to take a whole console tree down on Windows. This only ever
- * runs after DevMuxel has already asked the shell to exit, so nothing is being
+ * runs after DevLobby has already asked the shell to exit, so nothing is being
  * killed that the user did not close.
  */
 function reapTree(pid: number, detach = false): void {

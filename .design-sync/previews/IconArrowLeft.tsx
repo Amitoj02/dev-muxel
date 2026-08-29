@@ -1,4 +1,4 @@
-import { IconArrowLeft } from 'dev-muxel'
+import { IconArrowLeft } from 'devlobby'
 
 /** Browser — back */
 export const Default = (): React.JSX.Element => (

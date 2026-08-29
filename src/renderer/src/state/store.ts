@@ -77,7 +77,7 @@ export type PaneRuntime = {
   /** Last title the shell reported via OSC 0/2. */
   title: string | null
   /**
-   * The command DevMuxel typed into this shell *and pressed Enter on*, if any.
+   * The command DevLobby typed into this shell *and pressed Enter on*, if any.
    *
    * The distinction matters: a repository's "command on open" is typed into
    * every terminal whether or not "press Enter for me" is set, so the pane's
@@ -171,7 +171,7 @@ export type AppState = {
   /** Last terminal pane to hold focus — where a note's "send" lands. */
   lastTerminalPaneId: string | null
   /**
-   * Last browser pane to hold focus. A session running /devmuxel-browser asks
+   * Last browser pane to hold focus. A session running /devlobby-browser asks
    * for "the element picker" without knowing which pane it means; this is what
    * it means.
    */

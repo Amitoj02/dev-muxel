@@ -44,7 +44,7 @@ const PRIVATE_IP = /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.)/
 /**
  * Turn whatever was typed into a URL the guest can load.
  *
- * Deliberately not a search box. DevMuxel never touches the network on its own,
+ * Deliberately not a search box. DevLobby never touches the network on its own,
  * and quietly posting half-typed thoughts to a search engine would be the one
  * place it did — so anything that is not a URL comes back as an error the bar
  * can show, rather than as a query.
@@ -105,12 +105,12 @@ function parseUrl(candidate: string): UrlResult {
  * Guests share one persistent partition, so a dev server's cookies and local
  * storage survive a reload — you log into your own app once, not once per
  * pane. It is a different session from the app's own, which is what keeps page
- * storage out of DevMuxel's.
+ * storage out of DevLobby's.
  *
  * Shared because both sides need the exact same string: the renderer puts it
  * on the tag, and main looks the session up by it.
  */
-export const BROWSER_PARTITION = 'persist:devmuxel-browser'
+export const BROWSER_PARTITION = 'persist:devlobby-browser'
 
 /** True for a scheme a pane is allowed to be pointed at. */
 export function isWebUrl(url: string): boolean {
@@ -219,7 +219,7 @@ export function fitScale(
 /**
  * A clean Chrome user agent for the guest.
  *
- * The default one carries `DevMuxel/1.0.0 Electron/43.4.1`, which some sites
+ * The default one carries `DevLobby/1.0.0 Electron/43.4.1`, which some sites
  * refuse outright and every site can fingerprint, so the desktop preset
  * overrides it too rather than only the handheld ones. The Chrome version is
  * passed in from `process.versions.chrome`, so this never goes stale.

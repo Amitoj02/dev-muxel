@@ -1,4 +1,4 @@
-import { TitleBar } from 'dev-muxel'
+import { TitleBar } from 'devlobby'
 
 /*
  * An app singleton driven entirely by the store, so it has one state rather

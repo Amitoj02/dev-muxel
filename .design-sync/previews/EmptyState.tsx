@@ -1,4 +1,4 @@
-import { EmptyState } from 'dev-muxel'
+import { EmptyState } from 'devlobby'
 
 /*
  * What the grid shows before anything is open. Reads nothing but the shell

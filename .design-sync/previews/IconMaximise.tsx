@@ -1,4 +1,4 @@
-import { IconMaximise } from 'dev-muxel'
+import { IconMaximise } from 'devlobby'
 
 /** Window controls */
 export const Default = (): React.JSX.Element => (

@@ -1,5 +1,5 @@
 /*
- * DevMuxel chrome.
+ * DevLobby chrome.
  *
  * Everything reads from tokens.css. Sizes here are the ones from the design
  * handoff, kept literal (38px titlebar, 30px pane header, 3px spine) rather
@@ -1994,7 +1994,7 @@ body {
  * filled button in a bar of hairline outlines — as an outline it read as just
  * another toggle and was being missed. Blue while it is off: the browser
  * pane's own accent, and an invitation. Red while it is on, because every
- * other live state in DevMuxel is red.
+ * other live state in DevLobby is red.
  *
  * Not `netlog__pick`: that name was already the network log's row checkbox,
  * eleven pixels square with `display: grid`, and being defined further down

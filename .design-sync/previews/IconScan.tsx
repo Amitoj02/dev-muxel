@@ -1,4 +1,4 @@
-import { IconScan } from 'dev-muxel'
+import { IconScan } from 'devlobby'
 
 /** Repositories — scan a folder */
 export const Default = (): React.JSX.Element => (

@@ -1,4 +1,4 @@
-import { ConfirmCloseTab } from 'dev-muxel'
+import { ConfirmCloseTab } from 'devlobby'
 
 /*
  * Reads the tab out of the session, so the id has to be a real one. The harness

@@ -120,7 +120,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
     const el = ref.current
     if (!el) return
     registerView(pane.id, el)
-    // How /devmuxel-browser reaches this pane's picker from a session
+    // How /devlobby-browser reaches this pane's picker from a session
     // elsewhere.
     registerArm(pane.id, () => void pickRef.current?.())
 
@@ -148,12 +148,12 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
       const ua = userAgentFor(viewport, chromeVersion())
       el.setUserAgent(ua)
 
-      void window.devmuxel.browser.attach(pane.id, el.getWebContentsId()).then((result) => {
+      void window.devlobby.browser.attach(pane.id, el.getWebContentsId()).then((result) => {
         if (!result.ok) return
-        void window.devmuxel.browser.emulate(pane.id, viewport, ua)
+        void window.devlobby.browser.emulate(pane.id, viewport, ua)
         // A remounted pane (reopened with Ctrl+Shift+T) has a log in main
         // that this side knows nothing about yet.
-        void window.devmuxel.browser.entries(pane.id).then(({ entries, attached: live }) => {
+        void window.devlobby.browser.entries(pane.id).then(({ entries, attached: live }) => {
           replaceNet(pane.id, entries, live)
         })
       })
@@ -239,7 +239,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
       // to survive it, because the element it belongs to is coming straight
       // back. Gone from the grid means gone for good.
       if (paneById(getState(), pane.id)) return
-      void window.devmuxel.browser.detach(pane.id)
+      void window.devlobby.browser.detach(pane.id)
       dropNet(pane.id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,7 +257,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
 
     const ua = userAgentFor(pane.viewport, chromeVersion())
     el.setUserAgent(ua)
-    void window.devmuxel.browser.emulate(pane.id, pane.viewport, ua).then((result) => {
+    void window.devlobby.browser.emulate(pane.id, pane.viewport, ua).then((result) => {
       if (result.missing.length > 0 && result.missing[0] !== 'debugger') {
         actions.toast(`Emulating ${result.missing.join(' and ')} is not supported here`, 'error')
       }
@@ -348,7 +348,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   }, [armOnce])
 
   /**
-   * What /devmuxel-browser reaches. It asks for the selector, so it turns it on
+   * What /devlobby-browser reaches. It asks for the selector, so it turns it on
    * rather than toggling — and opens the comments, because the session that
    * asked is now waiting on the send button in there.
    */

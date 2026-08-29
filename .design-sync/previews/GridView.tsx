@@ -1,4 +1,4 @@
-import { GridView } from 'dev-muxel'
+import { GridView } from 'devlobby'
 
 /*
  * The grid itself: the layout tree, the splitters between panes and the shells

@@ -1,6 +1,6 @@
-# Building with DevMuxel
+# Building with DevLobby
 
-DevMuxel is the design system of a desktop app: a repo-aware tiled workspace for
+DevLobby is the design system of a desktop app: a repo-aware tiled workspace for
 terminals, browsers and AI coding sessions. It is **dark-only**, drawn on a blue-black
 chassis with a 24px grid ruled into it, one signal red for anything that wants you,
 and one soft green for clean and passing. **Square corners are a rule of the system,
@@ -27,7 +27,7 @@ module store, so they render standalone.
 
 ## The styling idiom: CSS classes, not props
 
-DevMuxel styles with a **global stylesheet and BEM-ish class names**. Components take
+DevLobby styles with a **global stylesheet and BEM-ish class names**. Components take
 no `className`, no `sx`, no style props — they carry their own classes internally. For
 your own layout glue, use these same classes plus `var(--*)` tokens. Never invent a
 class name; if nothing fits, use inline styles built from tokens.
@@ -76,10 +76,10 @@ Library component for the control, DS classes and tokens for your own glue:
   </div>
   <div className="dialog__body" style={{ padding: '20px 16px' }}>
     <p style={{ margin: 0, font: '400 13px/1.6 var(--font-ui)', color: 'var(--ink-2)' }}>
-      <strong>dev-muxel</strong> is still running (pid 24180).
+      <strong>devlobby</strong> is still running (pid 24180).
     </p>
     <p style={{ margin: '10px 0 0', font: '400 11px/1.6 var(--font-mono)', color: 'var(--ink-faint)' }}>
-      C:\Users\dev\projects\dev-muxel
+      C:\Users\dev\projects\devlobby
     </p>
   </div>
   <div className="dialog__foot">

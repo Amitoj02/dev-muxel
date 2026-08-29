@@ -1,4 +1,4 @@
-import { IconMinimise } from 'dev-muxel'
+import { IconMinimise } from 'devlobby'
 
 /** Window controls */
 export const Default = (): React.JSX.Element => (

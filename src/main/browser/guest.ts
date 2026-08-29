@@ -1,7 +1,7 @@
 /**
  * Keeping a browser pane's guest page where it belongs.
  *
- * A browser pane runs somebody else's code inside DevMuxel's window, which is
+ * A browser pane runs somebody else's code inside DevLobby's window, which is
  * the one thing the rest of this app never does. Three defences, all of them
  * here so there is a single place to read them:
  *
@@ -24,7 +24,7 @@ import { BROWSER_PARTITION, isWebUrl } from '../../shared/browser'
  * whatever the tag asked for.
  */
 export function sanitiseGuestPreferences(prefs: WebPreferences & { preload?: string }): void {
-  // A preload would run with the guest's page but DevMuxel's module resolution;
+  // A preload would run with the guest's page but DevLobby's module resolution;
   // nothing in this app needs one, so nothing may have one.
   delete prefs.preload
   prefs.nodeIntegration = false
@@ -35,7 +35,7 @@ export function sanitiseGuestPreferences(prefs: WebPreferences & { preload?: str
   prefs.webviewTag = false
   prefs.allowRunningInsecureContent = false
   prefs.experimentalFeatures = false
-  // `alert()` in a guest opens a *native* modal parented to the DevMuxel
+  // `alert()` in a guest opens a *native* modal parented to the DevLobby
   // window, which would block every other pane — including the agents running
   // in them — until somebody clicks OK. A page in a pane does not get to do
   // that.
@@ -47,7 +47,7 @@ export function sanitiseGuestPreferences(prefs: WebPreferences & { preload?: str
   // A page in a pane nobody is looking at is usually a dev server mid-rebuild;
   // there is no reason for it to keep a core busy. Not inherited either: the
   // host sets this to false so a build never stalls, which is not a promise
-  // DevMuxel needs to make to somebody else's website.
+  // DevLobby needs to make to somebody else's website.
   prefs.backgroundThrottling = true
 }
 
@@ -79,7 +79,7 @@ export function hardenGuest(contents: WebContents): void {
     if (!isWebUrl(url)) event.preventDefault()
   })
 
-  // `requestFullscreen()` in a guest takes the whole DevMuxel window
+  // `requestFullscreen()` in a guest takes the whole DevLobby window
   // fullscreen, hiding every other pane behind one page. The permission is
   // refused in the guests' session as well; this is the second lock on the same
   // door, because a tiling grid losing its tiles to an embedded video is not a

@@ -1,4 +1,4 @@
-import { NetworkLog } from 'dev-muxel'
+import { NetworkLog } from 'devlobby'
 import { ENTRIES } from './_fixtures'
 
 const noop = (): void => {}

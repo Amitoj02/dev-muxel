@@ -1,4 +1,4 @@
-import { IconZoom } from 'dev-muxel'
+import { IconZoom } from 'devlobby'
 
 /** Pane header — zoom this pane */
 export const Default = (): React.JSX.Element => (

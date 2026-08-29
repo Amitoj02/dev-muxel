@@ -1,5 +1,5 @@
 {
-  "name": "dev-muxel",
+  "name": "devlobby",
   "version": "1.0.0",
   "description": "A repo-aware tiled workspace for terminals, browsers, and AI coding sessions",
   "main": "./out/main/index.js",
@@ -62,6 +62,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Amitoj02/dev-muxel.git"
+    "url": "https://github.com/Amitoj02/devlobby.git"
   }
 }

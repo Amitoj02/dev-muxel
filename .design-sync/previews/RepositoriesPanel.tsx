@@ -1,4 +1,4 @@
-import { RepositoriesPanel } from 'dev-muxel'
+import { RepositoriesPanel } from 'devlobby'
 
 /*
  * Its own `Overlay`, so one full-bleed card. The three seeded repos carry

@@ -1,4 +1,4 @@
-import { IconSend } from 'dev-muxel'
+import { IconSend } from 'devlobby'
 
 /** Send this to a Claude session */
 export const Default = (): React.JSX.Element => (

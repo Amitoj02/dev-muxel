@@ -1,4 +1,4 @@
-# design-sync notes — dev-muxel
+# design-sync notes — devlobby
 
 Repo-specific gotchas for future syncs. Read this before re-running the converter.
 
@@ -23,7 +23,7 @@ node .design-sync/make-entry.mjs    # → .design-sync/.cache/entry.tsx (exits 1
 - **`make-styles.mjs`** concatenates `tokens.css` + `@xterm/xterm/css/xterm.css` + `app.css`
   in main.tsx's own order. Needed because `cfg.cssEntry` is read verbatim (no `@import`
   resolution) and the converter's `tokens/` copier only handles token *packages* under
-  `node_modules` — DevMuxel's tokens are plain files. Without it, `[TOKENS_MISSING]`
+  `node_modules` — DevLobby's tokens are plain files. Without it, `[TOKENS_MISSING]`
   fires on 49 properties and every card renders unstyled. `fonts.css` is deliberately
   excluded: `cfg.extraFonts` ships it into `fonts/` with the woff2s and rewritten urls.
 - **`make-types.mjs`** emits a declaration tree. The repo has never emitted one, and
@@ -53,7 +53,7 @@ does three things no card can do without:
 - **Paints the chassis.** This is a dark DS; `--ink` is near-white, so an unwrapped
   component on a white card is invisible. It also sets the page background, so short
   components do not sit on a tall black slab.
-- **Stubs `window.devmuxel`.** Faithful to `src/preload/index.ts`. Keep it in step:
+- **Stubs `window.devlobby`.** Faithful to `src/preload/index.ts`. Keep it in step:
   a **missing `on.*` channel is not a silent no-op** — components subscribe in mount
   effects, so an absent key throws "is not a function" and React unmounts the card.
   That is exactly how TitleBar failed on the first pass.

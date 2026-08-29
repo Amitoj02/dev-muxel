@@ -1,4 +1,4 @@
-import { ShortcutsSheet } from 'dev-muxel'
+import { ShortcutsSheet } from 'devlobby'
 
 /*
  * Its own `Overlay`, narrow variant. A static sheet — the chord table is the

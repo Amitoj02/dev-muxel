@@ -1,9 +1,9 @@
-import { PaneHeader } from 'dev-muxel'
+import { PaneHeader } from 'devlobby'
 
 const noop = (): void => {}
 
 const git = {
-  path: 'C:\\Users\\dev\\projects\\dev-muxel',
+  path: 'C:\\Users\\dev\\projects\\devlobby',
   isRepo: true,
   branch: 'main',
   head: '4f1d2e1',
@@ -38,9 +38,9 @@ const terminal = {
   id: 'p1',
   kind: 'terminal' as const,
   repoId: 'r1',
-  cwd: 'C:\\Users\\dev\\projects\\dev-muxel',
+  cwd: 'C:\\Users\\dev\\projects\\devlobby',
   shellId: 'powershell',
-  label: 'dev-muxel'
+  label: 'devlobby'
 }
 
 const handlers = {
@@ -61,7 +61,7 @@ const Row = ({ children }: { children: React.ReactNode }): React.JSX.Element => 
 /** A terminal on a clean tree — the branch chip is the quiet green. */
 export const Clean = (): React.JSX.Element => (
   <Row>
-    <PaneHeader pane={terminal} label="dev-muxel" git={git} runtime={runtime} zoomed={false} {...handlers} />
+    <PaneHeader pane={terminal} label="devlobby" git={git} runtime={runtime} zoomed={false} {...handlers} />
   </Row>
 )
 
@@ -70,7 +70,7 @@ export const Dirty = (): React.JSX.Element => (
   <Row>
     <PaneHeader
       pane={terminal}
-      label="dev-muxel"
+      label="devlobby"
       git={{ ...git, staged: 1, modified: 3, untracked: 2, dirty: 4, ahead: 2 }}
       runtime={{ ...runtime, busy: true, title: 'npm run dev' }}
       zoomed={false}
@@ -97,7 +97,7 @@ export const Waiting = (): React.JSX.Element => (
 /** Zoomed swaps the zoom affordance for its inverse. */
 export const Zoomed = (): React.JSX.Element => (
   <Row>
-    <PaneHeader pane={terminal} label="dev-muxel" git={git} runtime={runtime} zoomed {...handlers} />
+    <PaneHeader pane={terminal} label="devlobby" git={git} runtime={runtime} zoomed {...handlers} />
   </Row>
 )
 
@@ -111,7 +111,7 @@ export const Browser = (): React.JSX.Element => (
         repoId: 'r1',
         url: 'http://localhost:5173/settings',
         viewport: 'desktop',
-        title: 'DevMuxel — Settings'
+        title: 'DevLobby — Settings'
       }}
       label="localhost:5173"
       git={git}

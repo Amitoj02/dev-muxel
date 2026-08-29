@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { IconFolder, IconPlus, MenuPopover } from 'dev-muxel'
+import { IconFolder, IconPlus, MenuPopover } from 'devlobby'
 
 const noop = (): void => {}
 
@@ -53,7 +53,7 @@ const Repo = ({
 export const Open = (): React.JSX.Element => (
   <Anchored>
     <span className="pmenu__label">OPEN A TERMINAL ON</span>
-    <Repo name="dev-muxel" path="C:\Users\dev\projects\dev-muxel" colour="#e5372a" />
+    <Repo name="devlobby" path="C:\Users\dev\projects\devlobby" colour="#e5372a" />
     <Repo name="orbit-api" path="C:\Users\dev\projects\orbit-api" colour="#5b8fd6" />
     <Repo name="ledger" path="C:\Users\dev\projects\ledger" colour="#62c08a" />
     <div className="pmenu__sep" />

@@ -1,4 +1,4 @@
-import { IconUnzoom } from 'dev-muxel'
+import { IconUnzoom } from 'devlobby'
 
 /** Pane header — back to the grid */
 export const Default = (): React.JSX.Element => (

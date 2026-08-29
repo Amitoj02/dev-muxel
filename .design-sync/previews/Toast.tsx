@@ -1,4 +1,4 @@
-import { Toast } from 'dev-muxel'
+import { Toast } from 'devlobby'
 
 const noop = (): void => {}
 

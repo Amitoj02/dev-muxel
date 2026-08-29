@@ -1,7 +1,7 @@
 /*
  * Emit a declaration tree for the sync's prop extraction.
  *
- * The converter reads `<Name>Props` out of a shipped `.d.ts` tree. DevMuxel is
+ * The converter reads `<Name>Props` out of a shipped `.d.ts` tree. DevLobby is
  * an app, not a published package, so it has never emitted one — without this
  * every component's contract degrades to `[key: string]: unknown`, and the
  * design agent gets no API to code against.

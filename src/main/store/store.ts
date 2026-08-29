@@ -1,7 +1,7 @@
 /**
  * Persistence.
  *
- * Everything DevMuxel remembers between launches lives in one JSON file in
+ * Everything DevLobby remembers between launches lives in one JSON file in
  * userData. Writes are debounced and atomic (temp file + rename) because the
  * renderer saves on every layout nudge and a half-written state file would
  * cost the user their whole grid.
@@ -38,11 +38,11 @@ export class Store {
   constructor(private dir: string) {}
 
   private get statePath(): string {
-    return path.join(this.dir, 'devmuxel-state.json')
+    return path.join(this.dir, 'devlobby-state.json')
   }
 
   private get backupPath(): string {
-    return path.join(this.dir, 'devmuxel-state.bak.json')
+    return path.join(this.dir, 'devlobby-state.bak.json')
   }
 
   private get boundsPath(): string {
@@ -219,7 +219,7 @@ function migrateSettings(input: unknown): Settings {
   num('browserNetLimit', 20, 5000)
   bool('browserCaptureBodies')
   str('claudeEffort', CLAUDE_EFFORTS)
-  // The model ends up on a command line DevMuxel types into a shell, so it is
+  // The model ends up on a command line DevLobby types into a shell, so it is
   // checked against the shape of a model name rather than merely its length.
   // This file is plain JSON that a user may well open and edit.
   if (typeof raw.claudeModel === 'string' && isSafeFlagValue(raw.claudeModel)) {
@@ -249,7 +249,7 @@ function sanitiseBrowserPane(pane: BrowserPane): BrowserPane {
  *
  * A version 1 file has one grid at the top of `session` and no tabs at all;
  * that becomes the single tab everything carries on inside, so upgrading
- * DevMuxel costs nobody their layout.
+ * DevLobby costs nobody their layout.
  *
  * Every layout goes through `sanitiseLayout` because it is the one deeply
  * nested thing in this file and the one thing the renderer cannot survive

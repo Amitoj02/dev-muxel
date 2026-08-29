@@ -5,7 +5,7 @@
  * up in the pane behind a badge rather than going anywhere, because the
  * session that will act on them does not exist yet — you write them while you
  * are looking at the page, and a Claude session comes and collects the lot
- * when you run /devmuxel-browser in one and press send.
+ * when you run /devlobby-browser in one and press send.
  *
  * That is the whole reason this is not the send dialog the network log uses:
  * there is nothing to decide at the moment of writing, so there is nothing to
@@ -174,7 +174,7 @@ export function CommentsPanel({
           Only on screen when there is something to do about it. Sending is
           half a handshake — the other half is a skill in the user's home
           directory, and until this build wrote it there is no way to tell
-          whether the copy they have still matches this DevMuxel.
+          whether the copy they have still matches this DevLobby.
         */}
         {skill.status && !skill.status.current && (
           <button
@@ -201,7 +201,7 @@ export function CommentsPanel({
           title={
             waiting
               ? 'A Claude session is waiting for these'
-              : 'Run /devmuxel-browser in a Claude session first'
+              : 'Run /devlobby-browser in a Claude session first'
           }
           data-armed={waiting}
         >
@@ -284,22 +284,33 @@ export function CommentsPanel({
 }
 
 /**
- * What the install button says it will do, which depends on what is already
- * there — including a `/grid-browser` left behind by the rename, since that is
- * the one case where installing leaves the user with two slash commands and
- * only one of them working.
+ * Names any pre-rename skill still on disk.
+ *
+ * There can be two — `/devmuxel-browser` and `/grid-browser`, from someone who
+ * ran both and installed the skill from each — so this agrees with however many
+ * there are rather than assuming one.
  */
-function skillTitle(status: SkillStatus): string {
-  const stale = status.legacyDir
-    ? ` The pre-rename /grid-browser at ${status.legacyDir} is not removed — delete it yourself.`
-    : ''
-  return status.installed
-    ? `Your /devmuxel-browser skill was not written by this DevMuxel. Replaces ${status.dir}.${stale}`
-    : `Write /devmuxel-browser to ${status.dir}, so a Claude session can come and collect these.${stale}`
+function staleSkills(dirs: string[]): string {
+  if (dirs.length === 0) return ''
+  return dirs.length > 1
+    ? ` The pre-rename skills at ${dirs.join(' and ')} are not removed — delete them yourself.`
+    : ` The pre-rename skill at ${dirs[0]} is not removed — delete it yourself.`
 }
 
 /**
- * The `/devmuxel-browser` skill, and the one button that installs it.
+ * What the install button says it will do, which depends on what is already
+ * there — including a skill left behind by a rename, since that is the one case
+ * where installing leaves the user with more slash commands than work.
+ */
+function skillTitle(status: SkillStatus): string {
+  const stale = staleSkills(status.legacyDirs)
+  return status.installed
+    ? `Your /devlobby-browser skill was not written by this DevLobby. Replaces ${status.dir}.${stale}`
+    : `Write /devlobby-browser to ${status.dir}, so a Claude session can come and collect these.${stale}`
+}
+
+/**
+ * The `/devlobby-browser` skill, and the one button that installs it.
  *
  * Asked for when the comments open rather than at startup, because this is the
  * only place the answer is worth anything — and because "is there a file in
@@ -312,7 +323,7 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
 
   useEffect(() => {
     alive.current = true
-    void window.devmuxel.skill.status().then((s) => {
+    void window.devlobby.skill.status().then((s) => {
       if (alive.current) setStatus(s)
     })
     return () => {
@@ -322,19 +333,19 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
 
   const install = useCallback(() => {
     setBusy(true)
-    void window.devmuxel.skill
+    void window.devlobby.skill
       .install()
       .then(async (result) => {
         if (!result.ok) {
           actions.toast(`Could not write the skill — ${result.error}`, 'error')
           return
         }
-        const next = await window.devmuxel.skill.status()
+        const next = await window.devlobby.skill.status()
         if (alive.current) setStatus(next)
         actions.toast(
-          next.legacyDir
-            ? `Skill installed — run /devmuxel-browser. The old /grid-browser is still at ${next.legacyDir}; delete it when you like.`
-            : 'Skill installed — run /devmuxel-browser in a Claude session'
+          next.legacyDirs.length > 0
+            ? `Skill installed — run /devlobby-browser.${staleSkills(next.legacyDirs)}`
+            : 'Skill installed — run /devlobby-browser in a Claude session'
         )
       })
       .finally(() => {
@@ -367,13 +378,13 @@ export function sendComments(
     comments.map((c) => c.id)
   )
 
-  void window.devmuxel.browser.sendComments({ batch, pane: label, url, comments }).then(({ taken }) => {
+  void window.devlobby.browser.sendComments({ batch, pane: label, url, comments }).then(({ taken }) => {
     if (taken) {
       actions.toast(`Sent ${comments.length} comment${comments.length === 1 ? '' : 's'}`)
       return
     }
     actions.toast(
-      'No Claude session is waiting — run /devmuxel-browser in one, then send again',
+      'No Claude session is waiting — run /devlobby-browser in one, then send again',
       'error'
     )
   })

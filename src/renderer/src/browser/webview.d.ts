@@ -3,7 +3,7 @@
  *
  * Electron ships a full `WebviewTag` interface, but importing it would pull
  * the whole main-process API surface into the renderer's type program — the
- * one place in DevMuxel that has deliberately never seen `electron`. So this is
+ * one place in DevLobby that has deliberately never seen `electron`. So this is
  * the handful of methods the pane calls and nothing else: a method missing
  * from here is a method the pane is not allowed to reach for.
  *

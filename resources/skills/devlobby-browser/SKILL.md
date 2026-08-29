@@ -1,15 +1,15 @@
 ---
-name: devmuxel-browser
-description: Collect the comments somebody is marking a web page up with in DevMuxel's browser pane, and act on them. Use when the user runs /devmuxel-browser, or asks you to pick up their notes, comments or annotations from the DevMuxel browser, or says they will point at things in the page for you.
+name: devlobby-browser
+description: Collect the comments somebody is marking a web page up with in DevLobby's browser pane, and act on them. Use when the user runs /devlobby-browser, or asks you to pick up their notes, comments or annotations from the DevLobby browser, or says they will point at things in the page for you.
 ---
 
-<!-- devmuxel-skill-version: 2 -->
-<!-- Installed by DevMuxel. Editing this by hand is fine; the "update the
+<!-- devlobby-skill-version: 3 -->
+<!-- Installed by DevLobby. Editing this by hand is fine; the "update the
      skill" button in the browser pane's comments bar will overwrite it. -->
 
-# Comments from a DevMuxel browser pane
+# Comments from a DevLobby browser pane
 
-The user has DevMuxel open with a page in a browser pane. They want to point at
+The user has DevLobby open with a page in a browser pane. They want to point at
 things on that page, say what is wrong with each one, and hand you the lot.
 
 ## What to do
@@ -19,12 +19,12 @@ line while the user marks the page up, and it can sit there for many minutes.
 That is not a hang; do not interrupt it, and do not run it with a short timeout.
 
 ```
-powershell -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.claude\skills\devmuxel-browser\devmuxel-browser.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%USERPROFILE%\.claude\skills\devlobby-browser\devlobby-browser.ps1"
 ```
 
 Give the Bash tool a timeout of at least 900000 (15 minutes) when you run it.
 
-While it waits, DevMuxel has armed the element picker in the browser pane. The
+While it waits, DevLobby has armed the element picker in the browser pane. The
 user points at something, writes a comment, and repeats; the pane's comment
 button carries a count. When they press **Send**, the script prints the
 comments and exits.
@@ -52,11 +52,11 @@ send it again.
 
 ## When it fails
 
-- **"DevMuxel does not appear to be running"** — it is closed, or was killed
+- **"DevLobby does not appear to be running"** — it is closed, or was killed
   without cleaning up. Ask the user to start it.
-- **"No browser pane is open in DevMuxel"** — tell the user to open one with
+- **"No browser pane is open in DevLobby"** — tell the user to open one with
   the `＋ Browser` button in the titlebar, or `Ctrl+Alt+G`, then run
-  `/devmuxel-browser` again.
+  `/devlobby-browser` again.
 - **"Another Claude session is already waiting"** — a second session is holding
   the line. Only one can wait at a time; tell the user which to use.
 - **"Timed out"** — nothing was sent, and nothing was lost. Offer to wait again.

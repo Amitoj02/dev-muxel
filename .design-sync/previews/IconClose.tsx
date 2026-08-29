@@ -1,4 +1,4 @@
-import { IconClose } from 'dev-muxel'
+import { IconClose } from 'devlobby'
 
 /** The size the titlebar and pane headers actually draw it at. */
 export const Default = (): React.JSX.Element => (

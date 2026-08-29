@@ -1,4 +1,4 @@
-import { IconDot } from 'dev-muxel'
+import { IconDot } from 'devlobby'
 
 /** Status dot — repo accent, attention */
 export const Default = (): React.JSX.Element => (

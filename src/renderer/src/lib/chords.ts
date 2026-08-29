@@ -1,5 +1,5 @@
 /**
- * Which key chords belong to DevMuxel rather than to the program running in a
+ * Which key chords belong to DevLobby rather than to the program running in a
  * pane.
  *
  * This has to be one shared list because two places need to agree exactly:
@@ -19,7 +19,7 @@
  * would stop those users typing `@`, `\` or `~` into their terminals.
  */
 
-/** Ctrl+Alt chords DevMuxel binds. */
+/** Ctrl+Alt chords DevLobby binds. */
 const CTRL_ALT_KEYS = new Set([
   't', // new terminal
   'g', // new browser pane

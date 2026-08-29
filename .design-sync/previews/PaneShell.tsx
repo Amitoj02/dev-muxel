@@ -1,4 +1,4 @@
-import { PaneShell } from 'dev-muxel'
+import { PaneShell } from 'devlobby'
 
 const noop = (): void => {}
 
@@ -19,9 +19,9 @@ const terminal = {
   id: 'p1',
   kind: 'terminal' as const,
   repoId: 'r1',
-  cwd: 'C:\Users\dev\projects\dev-muxel',
+  cwd: 'C:\Users\dev\projects\devlobby',
   shellId: 'powershell',
-  label: 'dev-muxel'
+  label: 'devlobby'
 }
 
 /** A terminal pane at rest. */

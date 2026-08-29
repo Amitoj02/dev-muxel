@@ -1,8 +1,8 @@
 /**
  * The door a Claude session knocks on.
  *
- * `/devmuxel-browser` runs a script in whatever session you happen to be in,
- * and that script has to reach the DevMuxel that is already running — arm the
+ * `/devlobby-browser` runs a script in whatever session you happen to be in,
+ * and that script has to reach the DevLobby that is already running — arm the
  * element picker in it, then wait for you to finish marking the page up and
  * press send. A running Electron app cannot be driven by pointing at its
  * executable, so it listens instead.
@@ -139,10 +139,10 @@ export class BrowserBridge {
     try {
       if (req.method === 'POST' && url.pathname === '/v1/select') {
         if (!this.deps.hasBrowserPane()) {
-          return send(res, 409, { error: 'no browser pane is open in DevMuxel' })
+          return send(res, 409, { error: 'no browser pane is open in DevLobby' })
         }
         const armed = await this.deps.armPicker()
-        return send(res, armed ? 200 : 409, armed ? { ok: true } : { error: 'no browser pane is open in DevMuxel' })
+        return send(res, armed ? 200 : 409, armed ? { ok: true } : { error: 'no browser pane is open in DevLobby' })
       }
 
       if (req.method === 'GET' && url.pathname === '/v1/comments') {

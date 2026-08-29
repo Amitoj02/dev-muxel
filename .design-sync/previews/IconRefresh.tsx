@@ -1,4 +1,4 @@
-import { IconRefresh } from 'dev-muxel'
+import { IconRefresh } from 'devlobby'
 
 /** Repositories — refresh git */
 export const Default = (): React.JSX.Element => (

@@ -1,4 +1,4 @@
-import { NotesPanel } from 'dev-muxel'
+import { NotesPanel } from 'devlobby'
 
 /*
  * Its own `Overlay`, so one full-bleed card. Two seeded notes, one edited

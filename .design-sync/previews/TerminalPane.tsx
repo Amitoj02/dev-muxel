@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { TerminalPane, writeTerminal } from 'dev-muxel'
+import { TerminalPane, writeTerminal } from 'devlobby'
 
 /*
  * The real xterm terminal, with real scrollback.
@@ -12,8 +12,8 @@ import { TerminalPane, writeTerminal } from 'dev-muxel'
 
 const repo = {
   id: 'r1',
-  name: 'dev-muxel',
-  path: 'C:\\Users\\dev\\projects\\dev-muxel',
+  name: 'devlobby',
+  path: 'C:\\Users\\dev\\projects\\devlobby',
   color: '#e5372a'
 }
 
@@ -21,9 +21,9 @@ const pane = {
   id: 'p1',
   kind: 'terminal' as const,
   repoId: 'r1',
-  cwd: 'C:\\Users\\dev\\projects\\dev-muxel',
+  cwd: 'C:\\Users\\dev\\projects\\devlobby',
   shellId: 'powershell',
-  label: 'dev-muxel'
+  label: 'devlobby'
 }
 
 const E = '\u001b'
@@ -34,9 +34,9 @@ const blue = (s: string): string => `${E}[38;5;110m${s}${E}[0m`
 const bold = (s: string): string => `${E}[1m${s}${E}[0m`
 
 const DEV_SERVER = [
-  `${dim('PS')} ${blue('C:\\Users\\dev\\projects\\dev-muxel')}${dim('>')} npm run dev`,
+  `${dim('PS')} ${blue('C:\\Users\\dev\\projects\\devlobby')}${dim('>')} npm run dev`,
   '',
-  `${dim('>')} dev-muxel@1.0.0 dev`,
+  `${dim('>')} devlobby@1.0.0 dev`,
   `${dim('>')} electron-vite dev`,
   '',
   `  ${green('VITE v8.2.2')}  ready in ${bold('412')} ms`,
@@ -51,9 +51,9 @@ const DEV_SERVER = [
 ].join('\r\n')
 
 const FAILING = [
-  `${dim('PS')} ${blue('C:\\Users\\dev\\projects\\dev-muxel')}${dim('>')} npm run typecheck`,
+  `${dim('PS')} ${blue('C:\\Users\\dev\\projects\\devlobby')}${dim('>')} npm run typecheck`,
   '',
-  `${dim('>')} dev-muxel@1.0.0 typecheck:web`,
+  `${dim('>')} devlobby@1.0.0 typecheck:web`,
   '',
   `${red('src/renderer/src/components/GridView.tsx')}${dim(':142:18')} - ${red('error')} ${dim('TS2339')}:`,
   `  Property ${bold("'zoomedPaneId'")} does not exist on type ${bold("'TabState'")}.`,

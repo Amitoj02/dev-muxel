@@ -1,8 +1,8 @@
 /*
  * Preview harness for the claude.ai/design sync.
  *
- * Not app code — nothing here ships in DevMuxel. It exists because the design
- * pane renders each component standalone in a plain browser tab, and DevMuxel's
+ * Not app code — nothing here ships in DevLobby. It exists because the design
+ * pane renders each component standalone in a plain browser tab, and DevLobby's
  * components assume two things the app always provides and a bare tab never
  * does:
  *
@@ -10,7 +10,7 @@
  *      component on a white card is invisible. `PreviewHarness` paints
  *      `--bg-chassis` and sets the ui font, which is what `.app` does in the
  *      real window.
- *   2. `window.devmuxel`. The preload bridge. Every call site is inside a
+ *   2. `window.devlobby`. The preload bridge. Every call site is inside a
  *      handler or an effect (never module scope), so a stub installed before
  *      mount is enough to keep effects from throwing — TitleBar asks whether
  *      the window is maximised on mount, PageComments asks for skill status.
@@ -18,7 +18,7 @@
  * The store is seeded here rather than in each preview so every card sees one
  * coherent session: the same three repos, the same git states, the same tabs.
  * Settings come from the app's own `defaultSettings` rather than a copy, so
- * they cannot drift from what DevMuxel actually ships.
+ * they cannot drift from what DevLobby actually ships.
  */
 import type { JSX, ReactNode } from 'react'
 import { defaultSettings, STATE_VERSION } from '../src/main/store/defaults'
@@ -54,7 +54,7 @@ const bridge = {
       text: JSON.stringify(
         {
           projects: [
-            { id: 'r1', name: 'dev-muxel', branch: 'main', dirty: 4 },
+            { id: 'r1', name: 'devlobby', branch: 'main', dirty: 4 },
             { id: 'r2', name: 'orbit-api', branch: 'feat/pagination', dirty: 2 }
           ],
           total: 2
@@ -74,10 +74,10 @@ const bridge = {
       installed: true,
       version: 1,
       current: true,
-      dir: '~/.claude/skills/devmuxel-browser',
-      legacyDir: null
+      dir: '~/.claude/skills/devlobby-browser',
+      legacyDirs: []
     }),
-    install: async () => ({ ok: true as const, dir: '~/.claude/skills/devmuxel-browser' })
+    install: async () => ({ ok: true as const, dir: '~/.claude/skills/devlobby-browser' })
   },
   window: {
     minimise: noop,
@@ -108,8 +108,8 @@ const bridge = {
   }
 }
 
-if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).devmuxel) {
-  ;(window as unknown as Record<string, unknown>).devmuxel = bridge
+if (typeof window !== 'undefined' && !(window as unknown as Record<string, unknown>).devlobby) {
+  ;(window as unknown as Record<string, unknown>).devlobby = bridge
 }
 
 // --- the seeded session ----------------------------------------------------
@@ -117,8 +117,8 @@ if (typeof window !== 'undefined' && !(window as unknown as Record<string, unkno
 const REPOS = [
   {
     id: 'r1',
-    name: 'dev-muxel',
-    path: 'C:\\Users\\dev\\projects\\dev-muxel',
+    name: 'devlobby',
+    path: 'C:\\Users\\dev\\projects\\devlobby',
     color: '#e5372a',
     devUrl: 'http://localhost:5173'
   },
@@ -189,7 +189,7 @@ function seed(): void {
             repoId: 'r1',
             cwd: REPOS[0].path,
             shellId: 'powershell',
-            label: 'dev-muxel'
+            label: 'devlobby'
           },
           {
             id: 'p2',
@@ -205,7 +205,7 @@ function seed(): void {
             repoId: 'r1',
             url: 'http://localhost:5173',
             viewport: 'desktop',
-            title: 'DevMuxel'
+            title: 'DevLobby'
           },
           { id: 'p4', kind: 'note', noteId: 'n1' }
         ],

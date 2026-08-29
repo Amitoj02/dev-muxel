@@ -1,4 +1,4 @@
-import { BrowserPane } from 'dev-muxel'
+import { BrowserPane } from 'devlobby'
 
 /*
  * Built on Electron's <webview>, which does not exist in an ordinary browser
@@ -32,7 +32,7 @@ export const Desktop = (): React.JSX.Element => (
         repoId: 'r1',
         url: 'http://localhost:5173/pricing',
         viewport: 'desktop',
-        title: 'Pricing — DevMuxel'
+        title: 'Pricing — DevLobby'
       }}
     />
   </Stage>
@@ -48,7 +48,7 @@ export const Mobile = (): React.JSX.Element => (
         repoId: 'r1',
         url: 'http://localhost:5173/pricing',
         viewport: 'mobile',
-        title: 'Pricing — DevMuxel'
+        title: 'Pricing — DevLobby'
       }}
     />
   </Stage>

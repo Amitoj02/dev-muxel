@@ -146,7 +146,7 @@ const api = {
   },
 
   /**
-   * The `/devmuxel-browser` skill. Read-only until the user asks for it:
+   * The `/devlobby-browser` skill. Read-only until the user asks for it:
    * `install` is only ever reached from a button, and it writes nothing but the
    * skill's own two files.
    */
@@ -213,6 +213,6 @@ const api = {
   }
 }
 
-export type DevMuxelApi = typeof api
+export type DevLobbyApi = typeof api
 
-contextBridge.exposeInMainWorld('devmuxel', api)
+contextBridge.exposeInMainWorld('devlobby', api)

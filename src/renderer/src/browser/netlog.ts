@@ -199,7 +199,7 @@ export function useNetLog(paneId: string): PaneNetLog {
 /**
  * How a pane offers its element picker to the rest of the app.
  *
- * A session running /devmuxel-browser asks main for "the picker", main forwards
+ * A session running /devlobby-browser asks main for "the picker", main forwards
  * it to the renderer, and the renderer has to reach into one particular pane's
  * component to start it. The pane leaves a handle here for exactly that.
  */

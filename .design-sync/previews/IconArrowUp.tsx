@@ -1,4 +1,4 @@
-import { IconArrowUp } from 'dev-muxel'
+import { IconArrowUp } from 'devlobby'
 
 /** Git — commits ahead */
 export const Default = (): React.JSX.Element => (

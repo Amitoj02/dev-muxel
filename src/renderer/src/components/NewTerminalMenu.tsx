@@ -25,7 +25,7 @@ export function NewTerminalMenu({ onClose }: { onClose: () => void }): React.JSX
 
   const pick = async (): Promise<void> => {
     onClose()
-    const folder = await window.devmuxel.dialog.pickFolder('Open a terminal in')
+    const folder = await window.devlobby.dialog.pickFolder('Open a terminal in')
     if (folder) actions.addTerminal({ cwd: folder })
   }
 

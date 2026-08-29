@@ -35,10 +35,10 @@ export function TitleBar(): React.JSX.Element {
 
   useEffect(() => {
     let alive = true
-    void window.devmuxel.window.isMaximised().then((v) => {
+    void window.devlobby.window.isMaximised().then((v) => {
       if (alive) setMaximised(v)
     })
-    const off = window.devmuxel.on.windowMaximised((v) => setMaximised(v))
+    const off = window.devlobby.on.windowMaximised((v) => setMaximised(v))
     return () => {
       alive = false
       off()
@@ -66,7 +66,7 @@ export function TitleBar(): React.JSX.Element {
     <header className="titlebar">
       <div className="titlebar__brand">
         <span className="titlebar__mark" />
-        <span className="titlebar__word">DEVMUXEL</span>
+        <span className="titlebar__word">DEVLOBBY</span>
       </div>
       <div className="titlebar__rule" />
 
@@ -146,21 +146,21 @@ export function TitleBar(): React.JSX.Element {
       <div className="wincontrols" style={NO_DRAG}>
         <button
           className="wincontrol"
-          onClick={() => window.devmuxel.window.minimise()}
+          onClick={() => window.devlobby.window.minimise()}
           aria-label="Minimise"
         >
           <IconMinimise />
         </button>
         <button
           className="wincontrol"
-          onClick={() => window.devmuxel.window.toggleMaximise()}
+          onClick={() => window.devlobby.window.toggleMaximise()}
           aria-label={maximised ? 'Restore' : 'Maximise'}
         >
           {maximised ? <IconRestore /> : <IconMaximise />}
         </button>
         <button
           className="wincontrol wincontrol--close"
-          onClick={() => window.devmuxel.window.close()}
+          onClick={() => window.devlobby.window.close()}
           aria-label="Close"
         >
           <IconClose size={12} />

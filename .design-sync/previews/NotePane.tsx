@@ -1,4 +1,4 @@
-import { NotePane } from 'dev-muxel'
+import { NotePane } from 'devlobby'
 
 const noop = (): void => {}
 

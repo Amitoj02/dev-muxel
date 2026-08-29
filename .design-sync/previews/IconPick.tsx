@@ -1,4 +1,4 @@
-import { IconPick } from 'dev-muxel'
+import { IconPick } from 'devlobby'
 
 /** Browser — pick an element */
 export const Default = (): React.JSX.Element => (

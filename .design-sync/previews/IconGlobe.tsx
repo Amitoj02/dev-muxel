@@ -1,4 +1,4 @@
-import { IconGlobe } from 'dev-muxel'
+import { IconGlobe } from 'devlobby'
 
 /** Browser pane — the host chip */
 export const Default = (): React.JSX.Element => (

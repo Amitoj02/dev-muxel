@@ -1,7 +1,7 @@
 /**
  * The split-tree layout engine.
  *
- * DevMuxel's grid is a split tree (the same model tmux and VS Code's editor
+ * DevLobby's grid is a split tree (the same model tmux and VS Code's editor
  * groups use) rather than a fixed CSS grid, because the requirement is "as many
  * panes as I want, dragged into new sections". Every function here is pure: it
  * takes a tree and returns a new tree, so the renderer can keep the tree in

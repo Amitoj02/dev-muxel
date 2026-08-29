@@ -1,4 +1,4 @@
-import { Overlay } from 'dev-muxel'
+import { Overlay } from 'devlobby'
 
 const noop = (): void => {}
 
@@ -17,7 +17,7 @@ export const Confirm = (): React.JSX.Element => (
       </div>
       <div className="dialog__body" style={{ padding: '20px 16px' }}>
         <p style={{ margin: 0, font: '400 13px/1.6 var(--font-ui)', color: 'var(--ink-2)' }}>
-          <strong>dev-muxel</strong> is still running (pid 24180). Closing the pane ends it.
+          <strong>devlobby</strong> is still running (pid 24180). Closing the pane ends it.
         </p>
       </div>
       <div className="dialog__foot">

@@ -1,4 +1,4 @@
-import { IconRestore } from 'dev-muxel'
+import { IconRestore } from 'devlobby'
 
 /** Window controls — when maximised */
 export const Default = (): React.JSX.Element => (

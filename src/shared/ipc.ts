@@ -8,75 +8,75 @@
 
 export const CH = {
   // renderer -> main, request/response
-  stateLoad: 'devmuxel:state:load',
-  stateSave: 'devmuxel:state:save',
-  settingsPatch: 'devmuxel:settings:patch',
+  stateLoad: 'devlobby:state:load',
+  stateSave: 'devlobby:state:save',
+  settingsPatch: 'devlobby:settings:patch',
 
-  ptySpawn: 'devmuxel:pty:spawn',
-  ptyWrite: 'devmuxel:pty:write',
-  ptyResize: 'devmuxel:pty:resize',
-  ptyAck: 'devmuxel:pty:ack',
-  ptyKill: 'devmuxel:pty:kill',
+  ptySpawn: 'devlobby:pty:spawn',
+  ptyWrite: 'devlobby:pty:write',
+  ptyResize: 'devlobby:pty:resize',
+  ptyAck: 'devlobby:pty:ack',
+  ptyKill: 'devlobby:pty:kill',
 
-  gitRefresh: 'devmuxel:git:refresh',
-  gitSnapshot: 'devmuxel:git:snapshot',
-  gitSetRepos: 'devmuxel:git:setRepos',
+  gitRefresh: 'devlobby:git:refresh',
+  gitSnapshot: 'devlobby:git:snapshot',
+  gitSetRepos: 'devlobby:git:setRepos',
 
-  dialogPickFolder: 'devmuxel:dialog:pickFolder',
-  repoScan: 'devmuxel:repo:scan',
-  repoProbe: 'devmuxel:repo:probe',
+  dialogPickFolder: 'devlobby:dialog:pickFolder',
+  repoScan: 'devlobby:repo:scan',
+  repoProbe: 'devlobby:repo:probe',
 
-  openEditor: 'devmuxel:open:editor',
-  openFolder: 'devmuxel:open:folder',
-  openExternal: 'devmuxel:open:external',
-  editorAvailable: 'devmuxel:open:editorAvailable',
+  openEditor: 'devlobby:open:editor',
+  openFolder: 'devlobby:open:folder',
+  openExternal: 'devlobby:open:external',
+  editorAvailable: 'devlobby:open:editorAvailable',
 
-  shellsList: 'devmuxel:shells:list',
+  shellsList: 'devlobby:shells:list',
 
-  browserAttach: 'devmuxel:browser:attach',
-  browserDetach: 'devmuxel:browser:detach',
-  browserEmulate: 'devmuxel:browser:emulate',
-  browserEntries: 'devmuxel:browser:entries',
-  browserBody: 'devmuxel:browser:body',
-  browserClear: 'devmuxel:browser:clear',
-  browserStash: 'devmuxel:browser:stash',
+  browserAttach: 'devlobby:browser:attach',
+  browserDetach: 'devlobby:browser:detach',
+  browserEmulate: 'devlobby:browser:emulate',
+  browserEntries: 'devlobby:browser:entries',
+  browserBody: 'devlobby:browser:body',
+  browserClear: 'devlobby:browser:clear',
+  browserStash: 'devlobby:browser:stash',
   /** Renderer tells main whether there is a browser pane to arm at all. */
-  browserBridgeSync: 'devmuxel:browser:bridgeSync',
+  browserBridgeSync: 'devlobby:browser:bridgeSync',
   /** A pane's send button, handing its comments to a waiting session. */
-  browserSendComments: 'devmuxel:browser:sendComments',
+  browserSendComments: 'devlobby:browser:sendComments',
 
   /**
-   * Is the /devmuxel-browser skill installed for this user, and is it current?
+   * Is the /devlobby-browser skill installed for this user, and is it current?
    */
-  skillStatus: 'devmuxel:skill:status',
-  skillInstall: 'devmuxel:skill:install',
+  skillStatus: 'devlobby:skill:status',
+  skillInstall: 'devlobby:skill:install',
 
-  winMinimise: 'devmuxel:win:minimise',
-  winToggleMaximise: 'devmuxel:win:toggleMaximise',
-  winClose: 'devmuxel:win:close',
-  winIsMaximised: 'devmuxel:win:isMaximised',
-  winAttention: 'devmuxel:win:attention',
+  winMinimise: 'devlobby:win:minimise',
+  winToggleMaximise: 'devlobby:win:toggleMaximise',
+  winClose: 'devlobby:win:close',
+  winIsMaximised: 'devlobby:win:isMaximised',
+  winAttention: 'devlobby:win:attention',
 
-  clipboardWrite: 'devmuxel:clipboard:write',
-  clipboardRead: 'devmuxel:clipboard:read'
+  clipboardWrite: 'devlobby:clipboard:write',
+  clipboardRead: 'devlobby:clipboard:read'
 } as const
 
 /** main -> renderer, fire and forget */
 export const EV = {
-  ptyData: 'devmuxel:ev:pty:data',
-  ptyExit: 'devmuxel:ev:pty:exit',
-  gitState: 'devmuxel:ev:git:state',
-  browserNet: 'devmuxel:ev:browser:net',
-  browserCapture: 'devmuxel:ev:browser:capture',
-  browserFocus: 'devmuxel:ev:browser:focus',
+  ptyData: 'devlobby:ev:pty:data',
+  ptyExit: 'devlobby:ev:pty:exit',
+  gitState: 'devlobby:ev:git:state',
+  browserNet: 'devlobby:ev:browser:net',
+  browserCapture: 'devlobby:ev:browser:capture',
+  browserFocus: 'devlobby:ev:browser:focus',
   /** A session asked for the element picker on the last active browser pane. */
-  browserArmPicker: 'devmuxel:ev:browser:armPicker',
+  browserArmPicker: 'devlobby:ev:browser:armPicker',
   /** That batch has been read by a session; the pane may forget it. */
-  browserCommentsTaken: 'devmuxel:ev:browser:commentsTaken',
+  browserCommentsTaken: 'devlobby:ev:browser:commentsTaken',
   /** Whether a session is holding the line, so the pane can say so. */
-  browserWaiting: 'devmuxel:ev:browser:waiting',
-  winMaximised: 'devmuxel:ev:win:maximised',
-  winFocus: 'devmuxel:ev:win:focus',
-  appBeforeQuit: 'devmuxel:ev:app:beforeQuit',
-  menuAction: 'devmuxel:ev:menu:action'
+  browserWaiting: 'devlobby:ev:browser:waiting',
+  winMaximised: 'devlobby:ev:win:maximised',
+  winFocus: 'devlobby:ev:win:focus',
+  appBeforeQuit: 'devlobby:ev:app:beforeQuit',
+  menuAction: 'devlobby:ev:menu:action'
 } as const

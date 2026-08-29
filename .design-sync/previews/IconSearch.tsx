@@ -1,4 +1,4 @@
-import { IconSearch } from 'dev-muxel'
+import { IconSearch } from 'devlobby'
 
 /** Terminal — find in scrollback */
 export const Default = (): React.JSX.Element => (

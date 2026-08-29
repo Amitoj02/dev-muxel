@@ -1,4 +1,4 @@
-import { TabStrip } from 'dev-muxel'
+import { TabStrip } from 'devlobby'
 
 /*
  * Reads the tabs out of the store, so like the titlebar it is a singleton with

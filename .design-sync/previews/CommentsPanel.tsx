@@ -1,4 +1,4 @@
-import { CommentsPanel } from 'dev-muxel'
+import { CommentsPanel } from 'devlobby'
 import { COMMENTS } from './_fixtures'
 
 const noop = (): void => {}

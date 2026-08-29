@@ -1,4 +1,4 @@
-import { SendToClaude } from 'dev-muxel'
+import { SendToClaude } from 'devlobby'
 
 /*
  * Reads the pane's network log out of the netlog module rather than props, so

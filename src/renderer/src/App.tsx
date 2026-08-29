@@ -2,7 +2,7 @@
  * The app shell: titlebar, grid, overlays, toast.
  *
  * Everything below this is either the grid itself or a modal; there is no
- * router and no nested layout, which is the point — DevMuxel is one screen.
+ * router and no nested layout, which is the point — DevLobby is one screen.
  */
 
 import { useEffect } from 'react'

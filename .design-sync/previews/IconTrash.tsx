@@ -1,4 +1,4 @@
-import { IconTrash } from 'dev-muxel'
+import { IconTrash } from 'devlobby'
 
 /** Notes, repositories — delete */
 export const Default = (): React.JSX.Element => (

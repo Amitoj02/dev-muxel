@@ -1,4 +1,4 @@
-import { CommentPopover } from 'dev-muxel'
+import { CommentPopover } from 'devlobby'
 import { DESKTOP, PICKED } from './_fixtures'
 
 const noop = (): void => {}

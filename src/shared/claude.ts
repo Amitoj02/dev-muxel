@@ -41,11 +41,11 @@ export const SENSITIVE_HEADERS = [
 /** Query parameters with the same problem. */
 const SENSITIVE_QUERY = /^(access_token|token|api_?key|key|secret|password|sig|signature)$/i
 
-export const REDACTED = '<redacted by DevMuxel>'
+export const REDACTED = '<redacted by DevLobby>'
 
 /**
  * The same thing for a query parameter. Kept to bare letters because a URL
- * percent-encodes whatever it is given, and `%3Credacted+by+DevMuxel%3E` in the
+ * percent-encodes whatever it is given, and `%3Credacted+by+DevLobby%3E` in the
  * middle of a URL is harder to read than the token it replaced.
  */
 export const REDACTED_PARAM = 'REDACTED'
@@ -152,7 +152,7 @@ export function formatForClaude(items: SendableEntry[], opts: SendOptions): stri
   }
   const what = counted.length ? counted.join(' and ') : 'nothing'
   // The label can be the page's own <title>, so it is page-controlled as well.
-  out.push(`Captured in the DevMuxel browser pane "${clean(opts.paneLabel)}"${where} — ${what}:`, '')
+  out.push(`Captured in the DevLobby browser pane "${clean(opts.paneLabel)}"${where} — ${what}:`, '')
 
   if (opts.element) {
     out.push(...describeElement(opts.element, opts.maxBodyChars))
@@ -207,7 +207,7 @@ export function formatForClaude(items: SendableEntry[], opts: SendOptions): stri
 
   if (redactions > 0 && !opts.includeSensitive) {
     out.push(
-      `(${redactions} credential ${redactions === 1 ? 'value was' : 'values were'} redacted by DevMuxel before this was sent. Bodies are included in full, with control characters removed so this is safe to paste into a terminal.)`
+      `(${redactions} credential ${redactions === 1 ? 'value was' : 'values were'} redacted by DevLobby before this was sent. Bodies are included in full, with control characters removed so this is safe to paste into a terminal.)`
     )
   }
 
@@ -240,7 +240,7 @@ export function captureReference(opts: {
   const head = flatten(opts.comment)
   const label = flatten(opts.paneLabel)
   const what = `${opts.count} request${opts.count === 1 ? '' : 's'}`
-  const body = `the network capture is in ${flatten(opts.path)}: ${what} from the DevMuxel browser pane "${label}".`
+  const body = `the network capture is in ${flatten(opts.path)}: ${what} from the DevLobby browser pane "${label}".`
   return head ? `${head} — ${body}` : body
 }
 
@@ -282,7 +282,7 @@ export function formatComments(batch: CommentBatch, maxChars = DEFAULT_MAX_BODY_
   const count = batch.comments.length
 
   out.push(
-    `${count} comment${count === 1 ? '' : 's'} from the DevMuxel browser pane "${clean(batch.pane)}" on ${clean(batch.url)}:`,
+    `${count} comment${count === 1 ? '' : 's'} from the DevLobby browser pane "${clean(batch.pane)}" on ${clean(batch.url)}:`,
     ''
   )
 
@@ -344,7 +344,7 @@ function describeElement(el: PickedElement, maxChars: number): string[] {
     const shown = cut ? html.slice(0, maxChars) : html
     const runs = shown.match(/`+/g) ?? []
     const fence = '`'.repeat(Math.max(3, ...runs.map((run) => run.length + 1)))
-    const note = cut ? `\n... truncated by DevMuxel at ${maxChars} of ${html.length} characters` : ''
+    const note = cut ? `\n... truncated by DevLobby at ${maxChars} of ${html.length} characters` : ''
     out.push('', 'its markup', `${fence}html\n${shown}${note}\n${fence}`)
   }
 
@@ -408,7 +408,7 @@ function renderBody(body: SendableBody, e: NetEntry, max: number): string | null
   const runs = shown.match(/`+/g) ?? []
   const fence = '`'.repeat(Math.max(3, ...runs.map((run) => run.length + 1)))
 
-  const note = cut ? `\n... truncated by DevMuxel at ${max} of ${text.length} characters` : ''
+  const note = cut ? `\n... truncated by DevLobby at ${max} of ${text.length} characters` : ''
   return `${fence}${bodyLanguage(e.mimeType)}\n${shown}${note}\n${fence}`
 }
 
@@ -466,7 +466,7 @@ export type ClaudeInvocation = {
  *
  * This is what "the model and effort I started this with" means in practice: a
  * repository's `Command on open` is `claude --model opus --effort high`, and
- * anything DevMuxel sends onwards has to agree with the session already
+ * anything DevLobby sends onwards has to agree with the session already
  * running, or the answer comes back from a different model than the one you
  * chose.
  */
@@ -527,7 +527,7 @@ function isClaudeBinary(token: string): boolean {
 /**
  * A model or effort value safe to put on a command line.
  *
- * These end up in a string DevMuxel types into a live shell, and they come from
+ * These end up in a string DevLobby types into a live shell, and they come from
  * a settings file the user can edit by hand — so `opus; rm -rf /` has to be
  * refused here rather than only in the UI that usually produces them.
  */
@@ -536,7 +536,7 @@ export function isSafeFlagValue(value: string): boolean {
 }
 
 /**
- * A path DevMuxel can put inside double quotes on a command line.
+ * A path DevLobby can put inside double quotes on a command line.
  *
  * The captures directory is derived from the user's own profile path, and the
  * shell it will be typed into might be PowerShell, cmd or bash — two of which
@@ -549,7 +549,7 @@ export function isSafeQuotedPath(path: string): boolean {
 }
 
 /**
- * A token that needs no quoting in any of the five shells DevMuxel can open —
+ * A token that needs no quoting in any of the five shells DevLobby can open —
  * PowerShell, Windows PowerShell, cmd, Git Bash and WSL.
  *
  * Deliberately a whitelist, and deliberately without the backslash. A Windows
@@ -580,7 +580,7 @@ export function buildClaudeInvocation(inv: {
 }
 
 /**
- * Quote a value DevMuxel is putting on a command line itself — a path it chose,
+ * Quote a value DevLobby is putting on a command line itself — a path it chose,
  * a directory it just created.
  *
  * Returns null when the value cannot be made safe in all three of the shells a

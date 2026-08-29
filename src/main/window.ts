@@ -86,7 +86,7 @@ export function createWindow(deps: WindowDeps): BrowserWindow {
     autoHideMenuBar: true,
     thickFrame: true,
     roundedCorners: true,
-    title: 'DevMuxel',
+    title: 'DevLobby',
     webPreferences: {
       preload: deps.preload,
       contextIsolation: true,
@@ -113,7 +113,7 @@ export function createWindow(deps: WindowDeps): BrowserWindow {
     sanitiseGuestPreferences(webPreferences)
   })
 
-  // Nothing in DevMuxel should ever open a second window or navigate away.
+  // Nothing in DevLobby should ever open a second window or navigate away.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
