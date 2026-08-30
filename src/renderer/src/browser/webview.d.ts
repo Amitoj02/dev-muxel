@@ -64,6 +64,15 @@ export type WebviewFailEvent = Event & {
  * webpreferences and the rest — but React 19 dropped `webview` from the
  * intrinsic element list, so the attributes exist with nothing to attach them
  * to. This puts the element back.
+ *
+ * `allowpopups` cannot be corrected from here, and it needs correcting: React
+ * writes it as a *string* or not at all, while `WebViewHTMLAttributes` types it
+ * as a boolean — which is the one value React will not write. Retyping it here
+ * does nothing, because `@types/react` declares `webview` in this same
+ * interface and `skipLibCheck` lets the two merge silently with theirs
+ * winning. So the attribute is spread past the types at the one place that
+ * uses it; see `ALLOW_POPUPS` in BrowserPane.tsx for what goes wrong without
+ * it.
  */
 declare module 'react' {
   namespace JSX {

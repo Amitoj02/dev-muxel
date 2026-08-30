@@ -172,6 +172,15 @@ put a layout next to itself at two widths.
 The two buttons after the device switch are the ones that get work done: `⌖`
 points at an element, `NET` opens the network log.
 
+### Links that want a new tab
+
+A pane has no tabs, and a page in one is not allowed to open a window — so a
+`target="_blank"` link asks you instead. **Open in a new pane** gives the link
+a browser pane of its own next to the one you were on, keeping the page you
+were reading; **Ignore it** does nothing; and **Not for 5 minutes** stops that
+pane asking at all for a while, which is what you want on a site that opens a
+tab every time you touch it.
+
 ### Marking a page up
 
 The `⌖` button opens the pane's comments, and `Select Element` turns the
@@ -183,7 +192,14 @@ with it. `Enter` adds the comment.
 
 The selector **stays on**. Adding a comment puts you straight back into
 pointing, because marking a page up is a run of remarks and not one — it is off
-only when you press `Esc` or click the button again.
+when you press `Esc`, press `Stop Selecting`, or press `⌖` in the toolbar,
+which puts the selector and the comments away together in one press.
+
+For a single remark there is no mode to enter at all: **hold `Ctrl` over the
+page** and the same crosshair appears, click and the comment box opens over
+what you pointed at. It is one comment and then it is over — let go of `Ctrl`
+and the page is a page again. That is the one to reach for when you notice a
+thing wrong in passing; `Select Element` is the one for a sitting.
 
 Not everything is about one element, so the list also takes a plain note about
 the page as a whole.
@@ -193,6 +209,12 @@ the page as a whole.
 Comments stay in the pane behind a count on that button. Nothing is sent, and
 there is nothing to decide at the moment of writing — you mark the page up at
 your own pace, editing or deleting as you go.
+
+They are also **kept**. They go to the state file with everything else, so they
+survive quitting DevLobby and come back with the pane on the next launch; and a
+pane still holding comments nobody has collected asks before it closes, because
+a page you have marked up is the one thing in a browser pane that reloading
+cannot get back.
 
 Each one carries what an argument about layout actually turns on: a CSS path
 back to the element, where it sits and how big it is, its text, its markup, and

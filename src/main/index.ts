@@ -13,10 +13,11 @@ import { CH, EV } from '../shared/ipc'
 import type { GitState, PersistedState, PtySpawnResult, Settings, ViewportId } from '../shared/types'
 import { BrowserBridge } from './browser/bridge'
 import { BrowserCapture, type CaptureStatus } from './browser/network'
-import type { CommentBatch } from '../shared/browser'
+import { POPUP_SNOOZE_MS, type CommentBatch } from '../shared/browser'
 import { formatComments } from '../shared/claude'
 import { CaptureStash } from './browser/stash'
 import { hardenGuest, prepareGuestSession } from './browser/guest'
+import { PopupGate, type PopupDecision } from './browser/popups'
 import { installSkill, skillStatus } from './browser/skill'
 import { buildMenu } from './menu'
 import { LEGACY_APP_NAMES, migrateProfile } from './migrate'
@@ -59,6 +60,15 @@ let quitting = false
 let hasBrowserPane = false
 
 let bridge: BrowserBridge
+
+/**
+ * New tabs the pages in browser panes have asked for.
+ *
+ * Up here rather than in the renderer because this is where the request
+ * arrives and where it has to be refused; the renderer only gets the ones
+ * worth disturbing somebody over. See browser/popups.ts.
+ */
+const popups = new PopupGate(POPUP_SNOOZE_MS)
 
 /**
  * ConPTY's reflow behaviour depends on the Windows build, and xterm needs to
@@ -251,6 +261,17 @@ function registerIpc(): void {
     hasBrowserPane = Boolean(state?.hasBrowser)
   })
 
+  /**
+   * The answer to a new-tab question. Opening the page is the renderer's own
+   * business — it is a pane, and panes are its — so all that comes back here
+   * is whether this guest should be asked again.
+   */
+  ipcMain.on(CH.browserPopupDecide, (_e, guestId: number, decision: PopupDecision) => {
+    const id = Number(guestId)
+    if (!Number.isInteger(id)) return
+    popups.decide(id, decision === 'snooze' ? 'snooze' : 'ignore')
+  })
+
   ipcMain.handle(CH.browserSendComments, (_e, batch: CommentBatch) => ({
     // Formatted here rather than in the script: the text is built out of a web
     // page's own markup and styles, and `formatComments` is what strips the
@@ -368,7 +389,23 @@ app.whenReady().then(async () => {
 
   // Every guest is locked down as it appears, wherever it came from.
   app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() === 'webview') hardenGuest(contents)
+    if (contents.getType() !== 'webview') return
+    hardenGuest(contents, {
+      onPopup: (guestId, url) => {
+        // A page that opens tabs on its own gets one question and then
+        // silence, so the gate is consulted before the renderer hears
+        // anything at all.
+        if (popups.consider(guestId) !== 'ask') return
+        if (!win || win.isDestroyed()) {
+          popups.settle(guestId)
+          return
+        }
+        win.webContents.send(EV.browserPopup, guestId, url)
+      }
+    })
+    // Ids are reused once a guest is gone, and inheriting somebody else's
+    // snooze is a link that mysteriously does nothing.
+    contents.once('destroyed', () => popups.forget(contents.id))
   })
 
   registerIpc()

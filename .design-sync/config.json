@@ -12,6 +12,7 @@
     "BrandLockup": "src/renderer/src/components/BrandMark.tsx",
     "BrandMark": "src/renderer/src/components/BrandMark.tsx",
     "BrowserPane": "src/renderer/src/components/BrowserPane.tsx",
+    "BrowserPopup": "src/renderer/src/components/BrowserPopup.tsx",
     "CommentPopover": "src/renderer/src/components/PageComments.tsx",
     "CommentsPanel": "src/renderer/src/components/PageComments.tsx",
     "ConfirmClose": "src/renderer/src/components/ConfirmClose.tsx",
@@ -82,6 +83,10 @@
     "SendToClaude": {
       "cardMode": "single",
       "primaryStory": "Failure"
+    },
+    "BrowserPopup": {
+      "cardMode": "single",
+      "primaryStory": "Default"
     },
     "SettingsPanel": {
       "cardMode": "single",

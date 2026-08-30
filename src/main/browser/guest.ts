@@ -17,7 +17,7 @@
  */
 
 import { session, shell, type WebContents, type WebPreferences } from 'electron'
-import { BROWSER_PARTITION, isWebUrl } from '../../shared/browser'
+import { askablePopup, BROWSER_PARTITION, isWebUrl } from '../../shared/browser'
 
 /**
  * Applied from the host's `will-attach-webview`. Everything here overrides
@@ -51,23 +51,29 @@ export function sanitiseGuestPreferences(prefs: WebPreferences & { preload?: str
   prefs.backgroundThrottling = true
 }
 
+export type GuestDeps = {
+  /**
+   * The page wants a new tab. A pane has none, so the answer is the user's —
+   * see `popups.ts`. Called with the guest's own web contents id, which is how
+   * the renderer finds its way back to the pane the page is sitting in.
+   */
+  onPopup: (guestId: number, url: string) => void
+}
+
 /**
  * Applied to the guest's own web contents once it exists.
  *
  * `will-navigate` covers the page navigating itself; the window-open handler
- * covers `target="_blank"` and `window.open`. A pane has no tabs, so a link
- * meant for a new window is loaded in place — losing the page you were on is
- * still better than a link that silently does nothing, and anything that is
- * not http goes to the real browser instead.
+ * covers `target="_blank"` and `window.open`. Neither is ever allowed to open
+ * a window — a guest that could would be a browser window outside the grid,
+ * with none of the grid's rules on it. What a new tab gets instead is a
+ * question, asked once and answered by the user.
  */
-export function hardenGuest(contents: WebContents): void {
+export function hardenGuest(contents: WebContents, deps: GuestDeps): void {
   contents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) {
-      // Not inside the handler itself: it has to return a decision first.
-      setImmediate(() => {
-        if (!contents.isDestroyed()) void contents.loadURL(url)
-      })
-    }
+    // The decision has to be returned before anything else happens, so the
+    // asking is a side effect of denying rather than a condition of it.
+    if (askablePopup(url)) deps.onPopup(contents.id, url)
     return { action: 'deny' }
   })
 

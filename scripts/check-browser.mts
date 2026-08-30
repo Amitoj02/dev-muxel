@@ -18,7 +18,10 @@
 
 import {
   EMPTY_FILTER,
+  MAX_POPUP_URL,
+  POPUP_SNOOZE_MS,
   applyNetEvent,
+  askablePopup,
   clearNetLog,
   createNetLog,
   fitScale,
@@ -36,6 +39,7 @@ import {
   VIEWPORT_ORDER
 } from '../src/shared/browser.ts'
 import type { NetEntry, NetLogState } from '../src/shared/browser.ts'
+import { PopupGate } from '../src/main/browser/popups.ts'
 import {
   DEFAULT_MAX_BODY_CHARS,
   buildClaudeInvocation,
@@ -168,6 +172,96 @@ function url(input: string, base?: string): string | null {
     ![mobile, tablet, desktop].some((ua) => /electron|devlobby/i.test(ua))
   )
   check('ua: a missing version still produces a usable string', userAgentFor('desktop', '').includes('Chrome/'))
+}
+
+// ---------------------------------------------------------------------------
+// New tabs a page asks for
+//
+// A pane has no tabs, so every `target="_blank"` becomes a question — and the
+// answer to "please stop asking" has to actually stop it. Nothing here is
+// visible when it goes wrong: too eager and a site that opens a tab on every
+// click stacks dialogs over the grid, too shy and a link silently does
+// nothing, which is the bug this replaced.
+// ---------------------------------------------------------------------------
+{
+  check('popup: an ordinary link is worth asking about', askablePopup('https://example.com/a'))
+  check('popup: so is plain http, which is most dev servers', askablePopup('http://localhost:3000/'))
+  check(
+    'popup: about:blank is a page writing its own document, not one to open',
+    !askablePopup('about:blank')
+  )
+  check('popup: javascript: is never asked about', !askablePopup('javascript:alert(1)'))
+  check('popup: nor is file:', !askablePopup('file:///C:/Windows/win.ini'))
+  check('popup: nor is a data url', !askablePopup('data:text/html,<h1>hi'))
+  check(
+    'popup: an address longer than any real one is refused rather than rendered',
+    !askablePopup('https://a.test/' + 'x'.repeat(MAX_POPUP_URL))
+  )
+  check(
+    'popup: and one just inside the cap is not',
+    askablePopup('https://a.test/' + 'x'.repeat(MAX_POPUP_URL - 'https://a.test/'.length))
+  )
+
+  // The gate. `now` is a parameter throughout, so the five minutes are checked
+  // rather than waited out.
+  const t0 = 1_000_000
+  {
+    const gate = new PopupGate(POPUP_SNOOZE_MS)
+    check('gate: the first ask goes to the user', gate.consider(7, t0) === 'ask')
+    check(
+      'gate: a page firing new tabs in a loop gets one dialog, not a stack',
+      gate.consider(7, t0 + 1) === 'asking'
+    )
+    check('gate: another pane is a different question', gate.consider(8, t0 + 1) === 'ask')
+
+    gate.decide(7, 'ignore', t0 + 2)
+    check('gate: answering it means the next link is asked about', gate.consider(7, t0 + 3) === 'ask')
+  }
+
+  {
+    const gate = new PopupGate(POPUP_SNOOZE_MS)
+    gate.consider(7, t0)
+    gate.decide(7, 'snooze', t0)
+    check('gate: snoozed means not asked at all', gate.consider(7, t0 + 1000) === 'snoozed')
+    check(
+      'gate: and still not asked a minute later',
+      gate.consider(7, t0 + 60_000) === 'snoozed'
+    )
+    check(
+      'gate: the snooze is this pane and not the one next to it',
+      gate.consider(8, t0 + 1000) === 'ask'
+    )
+    check(
+      'gate: it says how long is left, for whoever has to word it',
+      gate.snoozeLeft(7, t0 + 60_000) === POPUP_SNOOZE_MS - 60_000
+    )
+    check(
+      'gate: once it runs out the link works again',
+      gate.consider(7, t0 + POPUP_SNOOZE_MS + 1) === 'ask'
+    )
+  }
+
+  {
+    // A question the renderer never answered — reloaded mid-dialog, say — must
+    // not silence that pane's links for the rest of the session.
+    const gate = new PopupGate(POPUP_SNOOZE_MS)
+    gate.consider(7, t0)
+    check('gate: an unanswered question still holds a minute later', gate.consider(7, t0 + 60_000) === 'asking')
+    check(
+      'gate: but a lost one expires rather than silencing the pane forever',
+      gate.consider(7, t0 + 10 * 60_000) === 'ask'
+    )
+  }
+
+  {
+    // Web contents ids are reused, and inheriting a stranger's snooze is a
+    // link that mysteriously does nothing.
+    const gate = new PopupGate(POPUP_SNOOZE_MS)
+    gate.consider(7, t0)
+    gate.decide(7, 'snooze', t0)
+    gate.forget(7)
+    check('gate: a guest that is gone takes its snooze with it', gate.consider(7, t0 + 1) === 'ask')
+  }
 }
 
 // ---------------------------------------------------------------------------

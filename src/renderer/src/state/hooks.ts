@@ -45,6 +45,7 @@ export {
   tabPaneIds,
   tabRunning,
   tabsSnapshot,
+  tabUnsent,
   tabTitle
 } from './store'
 

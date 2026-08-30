@@ -33,7 +33,13 @@ import type {
   TabState,
   TerminalPane
 } from '../../../shared/types'
+import type { PageComment } from '../../../shared/browser'
 import { hostLabel, normaliseUrl } from '../../../shared/browser'
+// The one thing this file reads from outside itself. Comments live in the
+// netlog registry so a page being marked up does not re-render the grid, but
+// they belong in the state file all the same — so the save reaches over for
+// them rather than the registry having to know what a save is.
+import { allComments, commentCount } from '../browser/netlog'
 import {
   anchorFor,
   autoAppend,
@@ -148,6 +154,11 @@ export type Overlay =
   | { kind: 'confirm-close-tab'; tabId: string }
   /** Requests picked out of a browser pane's log, on their way to a CLI. */
   | { kind: 'send-to-claude'; paneId: string; uids: string[] }
+  /**
+   * A page asked for a new tab. `guestId` is main's name for the guest that
+   * asked, which is what the answer has to be addressed to.
+   */
+  | { kind: 'browser-popup'; paneId: string; guestId: number; url: string }
 
 export type AppState = {
   ready: boolean
@@ -374,6 +385,20 @@ export function tabRunning(s: AppState, tabId: string): number {
   }).length
 }
 
+/**
+ * Comments in this grid that no session has taken yet.
+ *
+ * Kept apart from `tabRunning` because it is a different kind of loss: a shell
+ * can be started again, and a page marked up cannot be marked up again.
+ */
+export function tabUnsent(s: AppState, tabId: string): number {
+  let n = 0
+  for (const id of tabPaneIds(s, tabId)) {
+    if (paneById(s, id)?.kind === 'browser') n += commentCount(id)
+  }
+  return n
+}
+
 export function attentionCount(s: AppState): number {
   // Across every tab on purpose — a build finishing in a grid you are not
   // looking at is exactly the thing worth being told about. Never a pane you
@@ -542,9 +567,25 @@ export function toPersisted(s: AppState): PersistedState {
         layout,
         focusedPaneId
       })),
-      activeTabId: s.activeTabId
+      activeTabId: s.activeTabId,
+      // Read out of the netlog registry rather than held here, for the reason
+      // given at the top of that file — but written to disk, because a page
+      // somebody has marked up is the one thing in a browser pane that
+      // reloading cannot get back. Only for the panes actually being written:
+      // a comment naming a pane that is not coming back has nothing to show.
+      comments: commentsFor(s.panes.filter((p) => !isParked(s, p.id)).map((p) => p.id))
     }
   }
+}
+
+/** The saved comments of exactly these panes, or nothing at all. */
+function commentsFor(paneIds: string[]): Record<string, PageComment[]> | undefined {
+  const all = allComments()
+  const out: Record<string, PageComment[]> = {}
+  for (const id of paneIds) {
+    if (all[id]) out[id] = all[id]
+  }
+  return Object.keys(out).length > 0 ? out : undefined
 }
 
 // ---------------------------------------------------------------------------

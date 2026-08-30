@@ -15,7 +15,10 @@ import { hydrate, toPersisted } from './store'
 import { getSession } from '../terminal/session'
 import {
   armPicker,
+  hydrateComments,
   ingestNet,
+  onCommentsChanged,
+  paneOfWebContents,
   setBridgeWaiting,
   setNetStatus,
   settleBatch
@@ -26,6 +29,14 @@ const SAVE_DEBOUNCE_MS = 500
 export async function connect(): Promise<void> {
   const { state, shells, buildNumber } = await window.devlobby.state.load()
   hydrate(state, shells, buildNumber)
+
+  // Before the first paint: a restored browser pane should come up already
+  // wearing its badge, rather than appearing to have lost the comments and
+  // then getting them back a frame later.
+  hydrateComments(
+    state.session.comments,
+    getState().panes.map((p) => p.id)
+  )
 
   // Tell the watcher which paths to follow before the first paint, so headers
   // are populated by the time the panes appear.
@@ -113,6 +124,26 @@ function wireEvents(): void {
     setBridgeWaiting(waiting)
   })
 
+  /**
+   * A page wants a new tab, and only the user can say what that means here.
+   *
+   * Three ways it is refused without anybody being asked, all of them cases
+   * where a dialog would be the page interrupting rather than the user
+   * following a link: no pane owns that guest any more, the pane is in a grid
+   * that is not on screen — a page nobody can see did not just have a link
+   * clicked in it — or there is already a dialog up, which a page does not get
+   * to take away. Main is told either way; it is holding the request open.
+   */
+  window.devlobby.on.browserPopup((guestId, url) => {
+    const s = getState()
+    const paneId = paneOfWebContents(guestId)
+    if (!paneId || tabOfPane(s, paneId) !== s.activeTabId || s.overlay.kind !== 'none') {
+      window.devlobby.browser.popupDecision(guestId, 'ignore')
+      return
+    }
+    actions.showOverlay({ kind: 'browser-popup', paneId, guestId, url })
+  })
+
   // Nothing to do on focus: main already refreshes every repository when the
   // window comes forward, and asking again from here just doubles the work.
 
@@ -184,10 +215,16 @@ function wirePersistence(): void {
     }
   }
 
-  subscribe(() => {
+  const save = (): void => {
     if (timer !== null) return
     timer = window.setTimeout(flush, SAVE_DEBOUNCE_MS)
-  })
+  }
+
+  subscribe(save)
+  // Comments do not live in the store — see browser/netlog.ts — so nothing
+  // above would ever notice one being written. They are the one thing in a
+  // browser pane worth keeping, so they get their own way of saying so.
+  onCommentsChanged(save)
 
   // A settings change also has to reach the main process, which keeps its own
   // copy for the git poll intervals.

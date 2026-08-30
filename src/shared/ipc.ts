@@ -44,6 +44,8 @@ export const CH = {
   browserBridgeSync: 'devlobby:browser:bridgeSync',
   /** A pane's send button, handing its comments to a waiting session. */
   browserSendComments: 'devlobby:browser:sendComments',
+  /** What the user said about a page's request for a new tab. */
+  browserPopupDecide: 'devlobby:browser:popupDecide',
 
   /**
    * Is the /devlobby-browser skill installed for this user, and is it current?
@@ -75,6 +77,8 @@ export const EV = {
   browserCommentsTaken: 'devlobby:ev:browser:commentsTaken',
   /** Whether a session is holding the line, so the pane can say so. */
   browserWaiting: 'devlobby:ev:browser:waiting',
+  /** A page asked for a new tab; only the user can say what that should mean. */
+  browserPopup: 'devlobby:ev:browser:popup',
   winMaximised: 'devlobby:ev:win:maximised',
   winFocus: 'devlobby:ev:win:focus',
   appBeforeQuit: 'devlobby:ev:app:beforeQuit',

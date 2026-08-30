@@ -1152,6 +1152,24 @@ body {
   flex: 1;
 }
 
+/*
+ * The address a page wants a new tab for. It comes from the page, so it can be
+ * any length and hold no spaces at all — broken anywhere rather than allowed
+ * to push the dialog wider than the window, and capped at a few lines so a
+ * deliberately enormous one cannot bury the buttons under it.
+ */
+.popup-url {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+  font: 400 11.5px / 1.55 var(--font-mono);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  max-height: 5.5em;
+  overflow: auto;
+}
+
 /* --- repository rows --------------------------------------------------- */
 
 .repo-row {

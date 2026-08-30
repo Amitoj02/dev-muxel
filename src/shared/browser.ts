@@ -117,6 +117,30 @@ export function isWebUrl(url: string): boolean {
   return /^https?:\/\//i.test(url) || url === 'about:blank'
 }
 
+/**
+ * How long "not now" lasts when a page will not stop asking for new tabs.
+ *
+ * Shared because both sides say it out loud: main counts the five minutes, and
+ * the dialog is what promises them.
+ */
+export const POPUP_SNOOZE_MS = 5 * 60 * 1000
+
+/** The longest address worth carrying across a process boundary to render. */
+export const MAX_POPUP_URL = 4096
+
+/**
+ * Whether a page's request for a new tab is one there is anything to ask
+ * about.
+ *
+ * `about:blank` is the shape `window.open()` takes when the page means to
+ * write the document itself. There is no page to put in a pane of its own, so
+ * there is nothing to put to anybody — and the same goes for every scheme a
+ * pane may not load in the first place.
+ */
+export function askablePopup(url: string): boolean {
+  return /^https?:\/\//i.test(url) && url.length <= MAX_POPUP_URL
+}
+
 /** `localhost:5173` / `example.com` — what the pane header shows. */
 export function hostLabel(url: string | null | undefined): string {
   if (!url) return ''

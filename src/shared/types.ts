@@ -3,6 +3,10 @@
  * renderer. Nothing in here may import from `electron` or from the DOM.
  */
 
+// Type-only, and deliberately: `browser.ts` reads `ViewportId` back out of
+// this file, so anything but an erased import would be a cycle at runtime.
+import type { PageComment } from './browser'
+
 // ---------------------------------------------------------------------------
 // Layout tree
 // ---------------------------------------------------------------------------
@@ -262,6 +266,18 @@ export type SessionState = {
   panes: Pane[]
   tabs: TabState[]
   activeTabId: string | null
+  /**
+   * Comments written on the pages in browser panes, by pane id.
+   *
+   * They are on disk for the same reason the layout is: they are work, and
+   * work should survive the app being closed. Nothing else about a browser
+   * pane is expensive to recreate — a page reloads — but a page somebody has
+   * marked up cannot be got back by reloading it.
+   *
+   * Held here rather than on the pane itself so the shape a pane is restored
+   * from stays small and readable; they are reunited by id on the way in.
+   */
+  comments?: Record<string, PageComment[]>
 }
 
 export type PersistedState = {

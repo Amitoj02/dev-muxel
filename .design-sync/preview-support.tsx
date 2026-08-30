@@ -67,7 +67,8 @@ const bridge = {
     clear: async () => {},
     stash: async () => ({ ok: false as const, error: 'preview' }),
     bridgeSync: noop,
-    sendComments: async () => ({ taken: false })
+    sendComments: async () => ({ taken: false }),
+    popupDecision: noop
   },
   skill: {
     status: async () => ({
@@ -101,6 +102,7 @@ const bridge = {
     browserArmPicker: off,
     browserCommentsTaken: off,
     browserWaiting: off,
+    browserPopup: off,
     windowMaximised: off,
     windowFocus: off,
     beforeQuit: off,

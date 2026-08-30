@@ -40,7 +40,7 @@ import {
   useBridgeWaiting,
   useNetLog
 } from '../browser/netlog'
-import { cancelPick, pickElement } from '../browser/picker'
+import { cancelHold, cancelPick, holdPick, pickElement } from '../browser/picker'
 import { CommentPopover, CommentsPanel, sendComments } from './PageComments'
 import type {
   WebviewElement,
@@ -65,6 +65,26 @@ export type BrowserPaneProps = {
 
 /** Ports a dev server is most likely to be on, for the empty state. */
 const COMMON_PORTS = [3000, 5173, 8080]
+
+/**
+ * `allowpopups`, as an attribute React will actually write.
+ *
+ * `webview` has no hyphen in it, so React does not treat it as a custom
+ * element — it is an ordinary unknown tag, and an unknown attribute given the
+ * boolean `true` is dropped rather than written. Silently, in a production
+ * build. `allowpopups={true}` therefore produced a guest with no `allowpopups`
+ * attribute at all, and Chromium refuses a guest's new tabs outright without
+ * it: every `target="_blank"` and every `window.open` was blocked before
+ * main's window-open handler could be asked about it, which is why such a link
+ * appeared to do nothing whatsoever.
+ *
+ * The string is what React writes and what Electron reads (`hasAttribute`).
+ * The cast is only to get past React's own typing, which says boolean — the
+ * one thing that does not work. Allowing popups does not mean any window is
+ * ever opened: `hardenGuest` denies every one of them and puts the question to
+ * the user instead.
+ */
+const ALLOW_POPUPS = { allowpopups: 'true' } as unknown as { allowpopups?: boolean }
 
 /**
  * The CSS pixels the page was actually laid out at when a comment was written.
@@ -101,6 +121,15 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
   /** The selector is on: pointing at one thing leads straight to the next. */
   const [selecting, setSelecting] = useState(false)
   const selectorOn = useRef(false)
+  /**
+   * Bumped on every `dom-ready`, which is every fresh document in the guest.
+   *
+   * The Ctrl watcher lives *in* that document, so a navigation takes it with
+   * the page — this is what puts it back, and the only honest signal for it:
+   * a reload lands on the same URL, so nothing about the pane's own state
+   * changes to say the page it was written into is gone.
+   */
+  const [guestReady, setGuestReady] = useState(0)
   const waiting = useBridgeWaiting()
   const label = paneLabel(useApp(), pane)
   /**
@@ -134,6 +163,9 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
      * It fires again on every navigation; the attach itself is idempotent.
      */
     const onReady = (): void => {
+      // Before the early return: every dom-ready is a new document, and the
+      // Ctrl watcher has to be written into each one.
+      setGuestReady((n) => n + 1)
       if (attached.current) return
       attached.current = true
 
@@ -170,7 +202,16 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
 
     const onNavigate = (event: Event): void => {
       const url = (event as WebviewNavigateEvent).url
-      if (url) actions.patchBrowser(pane.id, { url })
+      // The element's own `src` is about:blank, and the guest reports arriving
+      // there before anything has pointed it at the pane's actual page — which
+      // `dom-ready` then reads back to decide what to load. Recording that
+      // arrival overwrites the page the pane was opened on with a blank one,
+      // and the pane comes up empty: it is the guest announcing where it
+      // started, not a navigation anybody asked for. Once the pane has pointed
+      // it somewhere, about:blank is a real destination again.
+      if (url && !(url === 'about:blank' && !attached.current)) {
+        actions.patchBrowser(pane.id, { url })
+      }
       setFailure(null)
       syncNav()
     }
@@ -320,6 +361,15 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
     setSelecting(false)
   }, [pane.id])
 
+  /** Take the page back out of pick mode, wherever the ask came from. */
+  const stopSelector = useCallback(() => {
+    if (!selectorOn.current) return
+    selectorOn.current = false
+    setSelecting(false)
+    const el = ref.current
+    if (el) cancelPick(el)
+  }, [])
+
   /**
    * The selector as a mode rather than a single shot.
    *
@@ -328,24 +378,77 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
    * it stays that way until you turn it off or press Escape.
    */
   const toggleSelector = useCallback(() => {
-    const el = ref.current
-    if (!el) return
     if (selectorOn.current) {
-      selectorOn.current = false
-      setSelecting(false)
-      cancelPick(el)
+      stopSelector()
       return
     }
+    if (!ref.current) return
     selectorOn.current = true
     setSelecting(true)
     void armOnce()
-  }, [armOnce])
+  }, [armOnce, stopSelector])
+
+  /**
+   * Everything the comment mode puts on screen, gone in one press.
+   *
+   * The button in the toolbar is lit while any part of it is up — the panel,
+   * the crosshair, a comment box waiting to be filled in — so pressing it
+   * while it is lit has to put all of it away. Anything less means a page left
+   * in pick mode with the panel that turns it off hidden behind the very
+   * button you just pressed.
+   */
+  const closeComments = useCallback(() => {
+    stopSelector()
+    setPicked(pane.id, null)
+    setShowComments(false)
+  }, [pane.id, stopSelector])
+
+  /** On is unchanged: the panel opens, and the selector is armed from inside it. */
+  const toggleComments = useCallback(() => {
+    if (showComments || selectorOn.current) closeComments()
+    else setShowComments(true)
+  }, [showComments, closeComments])
 
   /** Called when the comment box closes, whether it was saved or dropped. */
   const resumeSelector = useCallback(() => {
     if (!selectorOn.current) return
     void armOnce()
   }, [armOnce])
+
+  // --- Ctrl over the page -------------------------------------------------
+  /**
+   * The selector you do not have to turn on.
+   *
+   * A watcher sits in the page doing nothing until Ctrl is held over it, then
+   * draws the same crosshair the panel's picker does; clicking takes you
+   * straight to the comment box. It is one comment and then it is over — no
+   * mode was entered, so there is none to leave, which is what makes it worth
+   * reaching for when you notice one thing wrong in passing.
+   *
+   * Re-armed rather than looping: this effect runs again on every fresh
+   * document, whenever the panel's picker hands the page back, and once the
+   * comment box that a pick opened has closed. Each of those is a moment the
+   * page has room for it again, and none of them can spin.
+   */
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    // The panel's picker owns the page while it is on, and a comment box
+    // already open is the one pick this gesture is allowed at a time.
+    if (selecting || log.picked) return
+    if (!pane.url || pane.url === 'about:blank') return
+
+    let live = true
+    void holdPick(el).then((result) => {
+      if (!live || !result) return
+      setPicked(pane.id, result)
+    })
+
+    return () => {
+      live = false
+      cancelHold(el)
+    }
+  }, [pane.id, pane.url, guestReady, selecting, log.picked])
 
   /**
    * What /devlobby-browser reaches. It asks for the selector, so it turns it on
@@ -384,7 +487,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
         selecting={selecting}
         commentsOpen={showComments}
         commentCount={log.comments.length}
-        onToggleComments={() => setShowComments((open) => !open)}
+        onToggleComments={toggleComments}
         onGo={go}
         onBack={() => ref.current?.goBack()}
         onForward={() => ref.current?.goForward()}
@@ -407,7 +510,7 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
             className="browser-view"
             src="about:blank"
             partition={BROWSER_PARTITION}
-            allowpopups={true}
+            {...ALLOW_POPUPS}
             /* Belt and braces only: main overwrites every one of these as the
                guest attaches, because an HTML attribute is not a boundary. */
             webpreferences="contextIsolation=yes,sandbox=yes,nodeIntegration=no"
@@ -479,10 +582,10 @@ export function BrowserPane({ pane }: BrowserPaneProps): React.JSX.Element {
           onSend={() => {
             // Handing them over ends the run: the selector stays on between
             // comments, but not past the moment they leave.
-            if (selectorOn.current) toggleSelector()
+            stopSelector()
             sendComments(pane.id, label, pane.url, log.comments)
           }}
-          onClose={() => setShowComments(false)}
+          onClose={closeComments}
         />
       )}
 
@@ -615,7 +718,13 @@ function BrowserToolbar(props: ToolbarProps): React.JSX.Element {
         data-open={props.commentsOpen || props.selecting}
         data-armed={props.commentCount > 0}
         onClick={props.onToggleComments}
-        title="Comments on this page"
+        title={
+          props.selecting
+            ? 'Stop selecting and put the comments away'
+            : props.commentsOpen
+              ? 'Put the comments away'
+              : 'Comments on this page'
+        }
       >
         <IconPick size={11} />
         {props.commentCount > 0 && (

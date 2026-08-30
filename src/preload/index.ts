@@ -142,7 +142,14 @@ const api = {
     },
     /** Hand a pane's comments to whichever session is waiting for them. */
     sendComments: (batch: CommentBatch): Promise<{ taken: boolean }> =>
-      ipcRenderer.invoke(CH.browserSendComments, batch)
+      ipcRenderer.invoke(CH.browserSendComments, batch),
+    /**
+     * What the user said about a page's request for a new tab. Main holds the
+     * request open until it hears, so every way out of that dialog answers it.
+     */
+    popupDecision: (guestId: number, decision: 'open' | 'ignore' | 'snooze'): void => {
+      ipcRenderer.send(CH.browserPopupDecide, guestId, decision)
+    }
   },
 
   /**
@@ -206,6 +213,8 @@ const api = {
     browserCommentsTaken: (cb: (batch: string) => void): Off =>
       listen(EV.browserCommentsTaken, cb),
     browserWaiting: (cb: (waiting: boolean) => void): Off => listen(EV.browserWaiting, cb),
+    browserPopup: (cb: (guestId: number, url: string) => void): Off =>
+      listen(EV.browserPopup, cb),
     windowMaximised: (cb: (maximised: boolean) => void): Off => listen(EV.winMaximised, cb),
     windowFocus: (cb: (focused: boolean) => void): Off => listen(EV.winFocus, cb),
     beforeQuit: (cb: () => void): Off => listen(EV.appBeforeQuit, cb),

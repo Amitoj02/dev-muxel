@@ -24,6 +24,7 @@ import {
   tabPaneIds,
   tabRunning,
   tabTitle,
+  tabUnsent,
   useApp
 } from '../state/hooks'
 import { focusPaneHard } from '../lib/focus'
@@ -51,8 +52,10 @@ export function TabStrip(): React.JSX.Element {
   const close = (tabId: string): void => {
     // Same promise as closing a pane, undo included: the grid comes back with
     // Ctrl+Shift+T for five seconds. Still worth asking, because a grid full
-    // of agents is the expensive thing to lose track of.
-    if (app.settings.confirmClose && tabRunning(app, tabId) > 0) {
+    // of agents is the expensive thing to lose track of — and so is one
+    // holding comments nobody has collected yet.
+    const worth = tabRunning(app, tabId) > 0 || tabUnsent(app, tabId) > 0
+    if (app.settings.confirmClose && worth) {
       actions.showOverlay({ kind: 'confirm-close-tab', tabId })
       return
     }
@@ -199,8 +202,19 @@ function useTabReorder(): TabReorder {
   const from = useRef<{ tabId: string; x: number } | null>(null)
   const moved = useRef(false)
 
+  /**
+   * A press ends on release, whether or not it ever became a drag.
+   *
+   * Bound for the life of the strip rather than only while one is in flight,
+   * which is the whole point: an ordinary click on a tab never crosses the
+   * slop, so nothing would clear the press it opened — and the next time the
+   * pointer crossed the strip, button up, `over` would read it as that press
+   * still going and reorder the tabs under the cursor. Grids are numbered by
+   * position when they are unnamed, so the strip goes on reading "grid 1,
+   * grid 2" while the two of them trade contents: a swap nobody asked for,
+   * arrived at by clicking a tab and then moving the mouse.
+   */
   useEffect(() => {
-    if (!dragging) return
     const end = (): void => {
       from.current = null
       setDragging(null)
@@ -211,7 +225,7 @@ function useTabReorder(): TabReorder {
       window.removeEventListener('pointerup', end)
       window.removeEventListener('pointercancel', end)
     }
-  }, [dragging])
+  }, [])
 
   return {
     dragging,
@@ -225,6 +239,14 @@ function useTabReorder(): TabReorder {
     over(tabId, index, e) {
       const start = from.current
       if (!start) return
+
+      // A release the window never saw — let go outside it, or taken by the
+      // OS — leaves the press standing with nothing to end it. The button
+      // itself is the truth, and it says this is a bare pointer move.
+      if (e.buttons === 0) {
+        from.current = null
+        return
+      }
 
       // Below the slop it is still a click, not a drag.
       if (!moved.current && Math.abs(e.clientX - start.x) < REORDER_SLOP) return

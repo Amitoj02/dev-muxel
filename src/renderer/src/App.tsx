@@ -16,6 +16,7 @@ import { ShortcutsSheet } from './components/ShortcutsSheet'
 import { ConfirmClose } from './components/ConfirmClose'
 import { ConfirmCloseTab } from './components/ConfirmCloseTab'
 import { SendToClaude } from './components/SendToClaude'
+import { BrowserPopup } from './components/BrowserPopup'
 import { Toast } from './components/Toast'
 import { useShortcuts } from './lib/useShortcuts'
 import { useFolderDrop } from './lib/useFolderDrop'
@@ -60,6 +61,13 @@ export function App(): React.JSX.Element {
       {app.overlay.kind === 'confirm-close-tab' && <ConfirmCloseTab tabId={app.overlay.tabId} />}
       {app.overlay.kind === 'send-to-claude' && (
         <SendToClaude paneId={app.overlay.paneId} uids={app.overlay.uids} />
+      )}
+      {app.overlay.kind === 'browser-popup' && (
+        <BrowserPopup
+          paneId={app.overlay.paneId}
+          guestId={app.overlay.guestId}
+          url={app.overlay.url}
+        />
       )}
 
       {app.toast && (

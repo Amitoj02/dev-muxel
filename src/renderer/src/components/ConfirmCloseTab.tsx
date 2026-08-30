@@ -6,7 +6,7 @@
  */
 
 import { Overlay } from './Overlay'
-import { actions, tabPaneIds, tabRunning, tabTitle, useApp } from '../state/hooks'
+import { actions, tabPaneIds, tabRunning, tabTitle, tabUnsent, useApp } from '../state/hooks'
 
 export function ConfirmCloseTab({ tabId }: { tabId: string }): React.JSX.Element | null {
   const app = useApp()
@@ -15,6 +15,7 @@ export function ConfirmCloseTab({ tabId }: { tabId: string }): React.JSX.Element
   const title = tabTitle(app, tabId)
   const panes = tabPaneIds(app, tabId).length
   const running = tabRunning(app, tabId)
+  const unsent = tabUnsent(app, tabId)
 
   return (
     <Overlay onClose={() => actions.closeOverlay()}>
@@ -27,13 +28,26 @@ export function ConfirmCloseTab({ tabId }: { tabId: string }): React.JSX.Element
           <p
             style={{ margin: '0 0 10px', font: '400 13px/1.6 var(--font-ui)', color: 'var(--ink-2)' }}
           >
-            <strong>{title}</strong> holds {panes} pane{panes === 1 ? '' : 's'}, {running} of which{' '}
-            {running === 1 ? 'is' : 'are'} still running. Closing the grid ends{' '}
-            {running === 1 ? 'it' : 'them'}.
+            <strong>{title}</strong> holds {panes} pane{panes === 1 ? '' : 's'}
+            {running > 0 && (
+              <>
+                , {running} of which {running === 1 ? 'is' : 'are'} still running. Closing the grid
+                ends {running === 1 ? 'it' : 'them'}
+              </>
+            )}
+            .
+            {unsent > 0 && (
+              <>
+                {' '}
+                {running > 0 ? 'It is also holding ' : 'It is holding '}
+                {unsent} comment{unsent === 1 ? '' : 's'} no session has taken yet, and closing
+                throws {unsent === 1 ? 'it' : 'them'} away.
+              </>
+            )}
           </p>
           <p style={{ margin: 0, font: '400 11px/1.6 var(--font-mono)', color: 'var(--ink-faint)' }}>
-            Ctrl+Shift+T brings the whole grid back for five seconds afterwards, still running.
-            After that it is gone.
+            Ctrl+Shift+T brings the whole grid back for five seconds afterwards, still running and
+            still holding {unsent > 0 ? 'its comments' : 'everything'}. After that it is gone.
           </p>
         </div>
 

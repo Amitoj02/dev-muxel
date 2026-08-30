@@ -207,7 +207,11 @@ export function CommentsPanel({
         >
           <IconSend size={11} /> Send{waiting ? ' — a session is waiting' : ''}
         </button>
-        <button className="pane-btn" onClick={onClose} title="Hide the comments">
+        <button
+          className="pane-btn"
+          onClick={onClose}
+          title={picking ? 'Stop selecting and hide the comments' : 'Hide the comments'}
+        >
           <IconClose size={10} />
         </button>
       </div>
@@ -235,8 +239,9 @@ export function CommentsPanel({
         {comments.length === 0 && (
           <p className="netlog__empty">
             Nothing yet. Press <strong>Select Element</strong>, click something in the page and say
-            what is wrong with it — or write a note about the page as a whole. They gather here
-            until a Claude session asks for them.
+            what is wrong with it — or hold <strong>Ctrl</strong> over the page and click, which is
+            the same thing for one comment rather than a run of them. A note about the page as a
+            whole works too. They gather here until a Claude session asks for them.
           </p>
         )}
 

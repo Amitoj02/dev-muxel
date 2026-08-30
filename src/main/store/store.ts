@@ -16,17 +16,25 @@ import path from 'node:path'
 import { VIEWPORT_ORDER, isWebUrl } from '../../shared/browser'
 import { CLAUDE_EFFORTS, isSafeFlagValue } from '../../shared/claude'
 import { sanitiseLayout } from '../../shared/layout'
+import type { PageComment, PickedElement } from '../../shared/browser'
 import type {
   BrowserPane,
   Pane,
   PersistedState,
   Settings,
   TabState,
+  ViewportId,
   WindowBounds
 } from '../../shared/types'
 import { STATE_VERSION, defaultSettings, defaultState } from './defaults'
 
 const WRITE_DEBOUNCE_MS = 400
+
+/** Past this a pane has stopped holding comments and started hoarding them. */
+const MAX_COMMENTS_PER_PANE = 200
+
+/** One comment is a sentence about one thing, not a document. */
+const MAX_COMMENT_TEXT = 4000
 
 export class Store {
   private state: PersistedState = defaultState()
@@ -245,6 +253,99 @@ function sanitiseBrowserPane(pane: BrowserPane): BrowserPane {
 }
 
 /**
+ * The comments written on pages, however they were written.
+ *
+ * Every field is checked rather than trusted. Two reasons, and the second is
+ * the sharp one: this file is plain JSON a user can edit, and a comment is
+ * built out of a *web page's* own markup and styles — so it is the one thing
+ * in here that started life outside the app. It ends up rendered in a panel
+ * and, eventually, in a Claude session's context.
+ *
+ * The text itself is left as typed. Sanitising for a terminal is
+ * `formatComments`' job and happens on the way out, once, where it can be
+ * checked; doing it again here would only be able to do it worse.
+ */
+function migrateComments(raw: unknown): Record<string, PageComment[]> {
+  const out: Record<string, PageComment[]> = {}
+  if (!raw || typeof raw !== 'object') return out
+
+  for (const [paneId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof paneId !== 'string' || !paneId || !Array.isArray(value)) continue
+
+    const kept: PageComment[] = []
+    for (const item of value) {
+      if (!item || typeof item !== 'object') continue
+      const c = item as Record<string, unknown>
+      if (typeof c.id !== 'string' || !c.id) continue
+      if (typeof c.text !== 'string') continue
+
+      kept.push({
+        id: c.id.slice(0, 64),
+        element: sanitisePicked(c.element),
+        text: c.text.slice(0, MAX_COMMENT_TEXT),
+        viewport: VIEWPORT_ORDER.includes(c.viewport as ViewportId)
+          ? (c.viewport as ViewportId)
+          : 'desktop',
+        viewportSize: sanitiseSize(c.viewportSize),
+        at: typeof c.at === 'number' && Number.isFinite(c.at) ? c.at : Date.now()
+      })
+      // Comments are written to be sent and cleared, so a pane holding this
+      // many is a file that has stopped being a session and started being a
+      // leak. The cap is far past anything a person types.
+      if (kept.length >= MAX_COMMENTS_PER_PANE) break
+    }
+
+    if (kept.length > 0) out[paneId] = kept
+  }
+
+  return out
+}
+
+/** Whatever the page said about the element, shaped so the panel can render it. */
+function sanitisePicked(raw: unknown): PickedElement | null {
+  if (!raw || typeof raw !== 'object') return null
+  const el = raw as Record<string, unknown>
+  if (typeof el.selector !== 'string' || typeof el.tag !== 'string') return null
+
+  const strings = (v: unknown, cap: number): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').slice(0, cap) : []
+
+  const styles: Record<string, string> = {}
+  if (el.styles && typeof el.styles === 'object') {
+    for (const [k, v] of Object.entries(el.styles as Record<string, unknown>)) {
+      if (typeof v === 'string') styles[k.slice(0, 64)] = v.slice(0, 200)
+    }
+  }
+
+  return {
+    selector: el.selector.slice(0, 400),
+    tag: el.tag.slice(0, 40),
+    id: typeof el.id === 'string' ? el.id.slice(0, 200) : '',
+    classes: strings(el.classes, 24),
+    text: typeof el.text === 'string' ? el.text.slice(0, 400) : '',
+    html: typeof el.html === 'string' ? el.html.slice(0, 4000) : '',
+    rect: sanitiseRect(el.rect),
+    styles,
+    ancestors: strings(el.ancestors, 8),
+    url: typeof el.url === 'string' ? el.url.slice(0, 2000) : ''
+  }
+}
+
+function sanitiseRect(raw: unknown): PickedElement['rect'] {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  return { x: n(r.x), y: n(r.y), width: n(r.width), height: n(r.height) }
+}
+
+function sanitiseSize(raw: unknown): { width: number; height: number } | null {
+  if (!raw || typeof raw !== 'object') return null
+  const s = raw as Record<string, unknown>
+  if (typeof s.width !== 'number' || typeof s.height !== 'number') return null
+  if (!Number.isFinite(s.width) || !Number.isFinite(s.height)) return null
+  return { width: s.width, height: s.height }
+}
+
+/**
  * The tabs, however they were written.
  *
  * A version 1 file has one grid at the top of `session` and no tabs at all;
@@ -334,6 +435,16 @@ function migrate(input: PersistedState | null): PersistedState {
       typeof activeTabId === 'string' && session.tabs.some((t) => t.id === activeTabId)
         ? activeTabId
         : (session.tabs[0]?.id ?? null)
+
+    // Only for panes that came back. A comment names the pane it was written
+    // in, and one naming a pane that is gone has nowhere to be shown, so
+    // carrying it would grow the file for ever with nothing to show for it.
+    const live = new Set(session.panes.map((p) => p.id))
+    const comments = migrateComments(raw.comments)
+    for (const paneId of Object.keys(comments)) {
+      if (!live.has(paneId)) delete comments[paneId]
+    }
+    if (Object.keys(comments).length > 0) session.comments = comments
   }
 
   const shells = Array.isArray(input.shells)

@@ -20,6 +20,7 @@ import {
   runtimeFor,
   useApp
 } from '../state/hooks'
+import { useCommentCount } from '../browser/netlog'
 import { PaneHeader } from './PaneHeader'
 import { TerminalPane } from './TerminalPane'
 import { BrowserPane } from './BrowserPane'
@@ -54,6 +55,8 @@ export const PaneShell = memo(function PaneShell({
   const repo = pane.kind === 'note' ? null : repoById(app, pane.repoId)
   const note = pane.kind === 'note' ? noteById(app, pane.noteId) : null
   const accent = accentOf(repo?.color)
+  // A number, so a busy page's log does not re-render the chassis around it.
+  const comments = useCommentCount(pane.id)
 
   // Keep the note header's relative timestamp honest. Nothing to keep honest
   // about a header nobody can see.
@@ -61,18 +64,20 @@ export const PaneShell = memo(function PaneShell({
 
   const focus = useCallback(() => actions.focusPane(pane.id), [pane.id])
 
+  /**
+   * Two things are worth being asked about before they go: a shell that is
+   * still running, and comments nobody has collected. The second is the one
+   * that cannot be recreated by doing the same thing again.
+   */
   const close = useCallback(() => {
-    if (
-      pane.kind === 'terminal' &&
-      app.settings.confirmClose &&
-      !runtime.exited &&
-      runtime.pid !== null
-    ) {
+    const running = pane.kind === 'terminal' && !runtime.exited && runtime.pid !== null
+    const unsent = pane.kind === 'browser' && comments > 0
+    if (app.settings.confirmClose && (running || unsent)) {
       actions.showOverlay({ kind: 'confirm-close', paneId: pane.id })
       return
     }
     actions.closePane(pane.id)
-  }, [pane.id, pane.kind, app.settings.confirmClose, runtime.exited, runtime.pid])
+  }, [pane.id, pane.kind, app.settings.confirmClose, runtime.exited, runtime.pid, comments])
 
   /**
    * Paste a note's text into whichever terminal was focused last. No newline

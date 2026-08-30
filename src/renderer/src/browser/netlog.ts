@@ -114,11 +114,15 @@ export function setPicked(paneId: string, picked: PickedElement | null): void {
  * Comments are held here rather than in the app store for the same reason the
  * log is: they belong to one pane, nothing else in the grid reads them, and
  * they change while somebody is typing.
+ *
+ * Unlike the log, they go to disk — see `allComments` — so every change also
+ * wakes whoever is doing the writing.
  */
 export function addComment(paneId: string, comment: PageComment): void {
   const current = logs.get(paneId) ?? EMPTY
   logs.set(paneId, { ...current, comments: [...current.comments, comment], picked: null })
   notify(paneId)
+  commentsChanged()
 }
 
 export function updateComment(paneId: string, id: string, text: string): void {
@@ -128,12 +132,14 @@ export function updateComment(paneId: string, id: string, text: string): void {
     comments: current.comments.map((c) => (c.id === id ? { ...c, text } : c))
   })
   notify(paneId)
+  commentsChanged()
 }
 
 export function removeComment(paneId: string, id: string): void {
   const current = logs.get(paneId) ?? EMPTY
   logs.set(paneId, { ...current, comments: current.comments.filter((c) => c.id !== id) })
   notify(paneId)
+  commentsChanged()
 }
 
 /** Drop the ones a session has taken, by id, leaving anything added since. */
@@ -142,11 +148,75 @@ export function forgetComments(paneId: string, ids: string[]): void {
   const current = logs.get(paneId) ?? EMPTY
   logs.set(paneId, { ...current, comments: current.comments.filter((c) => !gone.has(c.id)) })
   notify(paneId)
+  commentsChanged()
 }
 
 /** Every pane holding comments, so a send can find them wherever they are. */
 export function panesWithComments(): string[] {
   return [...logs.entries()].filter(([, log]) => log.comments.length > 0).map(([id]) => id)
+}
+
+/** How many a pane is holding, for a header that must not re-render on traffic. */
+export function commentCount(paneId: string): number {
+  return logs.get(paneId)?.comments.length ?? 0
+}
+
+/**
+ * One pane's comment count, as React state.
+ *
+ * Subscribed to the same per-pane channel the log is, so it is *read* on every
+ * batch of network entries — but it returns a number, and React does not
+ * re-render a component whose snapshot has not changed. That is what lets a
+ * pane header ask this question without paying for the log.
+ */
+export function useCommentCount(paneId: string): number {
+  const subscribe = useCallback((fn: () => void) => subscribeNet(paneId, fn), [paneId])
+  const read = useCallback(() => commentCount(paneId), [paneId])
+  return useSyncExternalStore(subscribe, read, read)
+}
+
+// --- keeping them ----------------------------------------------------------
+
+/**
+ * Comments are the one thing in a browser pane that cannot be got back by
+ * reloading, so they are the one thing here that goes to disk. This is what
+ * the persistence layer reads; `onCommentsChanged` is what tells it to.
+ */
+export function allComments(): Record<string, PageComment[]> {
+  const out: Record<string, PageComment[]> = {}
+  for (const [paneId, log] of logs) {
+    if (log.comments.length > 0) out[paneId] = log.comments
+  }
+  return out
+}
+
+/** Put a previous session's comments back, for the panes that came back with them. */
+export function hydrateComments(
+  saved: Record<string, PageComment[]> | undefined,
+  livePaneIds: Iterable<string>
+): void {
+  if (!saved) return
+  const live = new Set(livePaneIds)
+  for (const [paneId, comments] of Object.entries(saved)) {
+    if (!live.has(paneId) || !Array.isArray(comments) || comments.length === 0) continue
+    const current = logs.get(paneId) ?? EMPTY
+    logs.set(paneId, { ...current, comments })
+    notify(paneId)
+  }
+}
+
+const commentWatchers = new Set<() => void>()
+
+/** Told whenever any pane's comments change, so they can be written out. */
+export function onCommentsChanged(fn: () => void): () => void {
+  commentWatchers.add(fn)
+  return () => {
+    commentWatchers.delete(fn)
+  }
+}
+
+function commentsChanged(): void {
+  for (const fn of commentWatchers) fn()
 }
 
 export function clearNet(paneId: string): void {
@@ -155,11 +225,19 @@ export function clearNet(paneId: string): void {
   notify(paneId)
 }
 
-/** The pane is gone for good; nothing should keep its log alive. */
+/**
+ * The pane is gone for good; nothing should keep its log alive.
+ *
+ * Its comments go with it, which is why closing a browser pane that is still
+ * holding some asks first — see `ConfirmClose`. By the time this runs the
+ * answer was yes, and the write that follows takes them off disk too.
+ */
 export function dropNet(paneId: string): void {
+  const had = commentCount(paneId) > 0
   logs.delete(paneId)
   listeners.delete(paneId)
   views.delete(paneId)
+  if (had) commentsChanged()
 }
 
 /**
@@ -244,6 +322,25 @@ export function registerView(paneId: string, el: WebviewElement | null): void {
 
 export function getView(paneId: string): WebviewElement | undefined {
   return views.get(paneId)
+}
+
+/**
+ * Which pane a guest belongs to, by the id the main process knows it as.
+ *
+ * Main sees a page asking for a new tab as a WebContents and nothing more —
+ * pane ids are this side's idea — so the way back is here, where the elements
+ * are. `getWebContentsId` throws until a guest has attached, which is an
+ * honest answer to "is it this one": a pane with no live guest did not ask.
+ */
+export function paneOfWebContents(webContentsId: number): string | null {
+  for (const [paneId, el] of views) {
+    try {
+      if (el.getWebContentsId() === webContentsId) return paneId
+    } catch {
+      /* not attached yet, so not the one that asked */
+    }
+  }
+  return null
 }
 
 /**
