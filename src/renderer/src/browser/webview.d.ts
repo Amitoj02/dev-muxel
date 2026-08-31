@@ -7,6 +7,15 @@
  * the handful of methods the pane calls and nothing else: a method missing
  * from here is a method the pane is not allowed to reach for.
  *
+ * One thing to know before calling any of them. Every method below that
+ * reaches the *guest* — `executeJavaScript`, `loadURL`, `reload`, the
+ * navigation pair, `isLoading` — begins by asking the element for the guest's
+ * id, and throws when there is not one: before the tag has attached, and again
+ * the moment the element leaves the document. Synchronously, before any
+ * promise exists, so `.catch()` on the call does not catch it. A throw in a
+ * React effect cleanup unmounts the whole root, so anything called on the way
+ * out has to expect it — see `inject` in `picker.ts`.
+ *
  * React does not know `<webview>` is an element either, hence the module
  * augmentation at the bottom. React 19 keeps its JSX namespace inside the
  * `react` module rather than in the global scope, so that is where it goes —
@@ -29,8 +38,9 @@ export type WebviewElement = HTMLElement & {
   canGoBack(): boolean
   canGoForward(): boolean
   /**
-   * The guest's web contents id — how main finds it to attach a debugger.
-   * Throws until the guest is attached and `dom-ready` has fired.
+   * The guest's web contents id — how main finds it to attach a debugger, and
+   * what every method above goes through to reach the page. Throws until the
+   * guest is attached and `dom-ready` has fired, and once more once it is gone.
    */
   getWebContentsId(): number
   /**

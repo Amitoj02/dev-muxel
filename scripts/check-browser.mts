@@ -41,6 +41,12 @@ import {
 import type { NetEntry, NetLogState } from '../src/shared/browser.ts'
 import { PopupGate } from '../src/main/browser/popups.ts'
 import {
+  cancelHold,
+  cancelPick,
+  holdPick,
+  pickElement
+} from '../src/renderer/src/browser/picker.ts'
+import {
   DEFAULT_MAX_BODY_CHARS,
   buildClaudeInvocation,
   captureReference,
@@ -262,6 +268,79 @@ function url(input: string, base?: string): string | null {
     gate.forget(7)
     check('gate: a guest that is gone takes its snooze with it', gate.consider(7, t0 + 1) === 'ask')
   }
+}
+
+// ---------------------------------------------------------------------------
+// Talking to a guest that has gone
+//
+// Every `<webview>` method that reaches the page throws — synchronously,
+// before there is a promise to reject — once the element has left the
+// document. The picker is called on exactly that edge: React runs a deleted
+// component's effect cleanups after it has removed the node, so a browser pane
+// being torn down cancels its Ctrl watcher against an element whose guest is
+// already gone. An exception there is one React has nowhere to put, and it
+// unmounts the root — which is a black window where the grid was, seconds
+// after closing a single pane.
+//
+// `picker.ts` imports nothing but types, so the real thing runs here.
+// ---------------------------------------------------------------------------
+{
+  type Method = (code: string) => Promise<unknown>
+  const view = (executeJavaScript: Method): Parameters<typeof cancelHold>[0] =>
+    ({ executeJavaScript }) as unknown as Parameters<typeof cancelHold>[0]
+
+  const gone = (): never => {
+    throw new Error(
+      'The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.'
+    )
+  }
+  // Not `throw` inside an async function: the point is that the element throws
+  // at the call, before any promise exists.
+  const dead = view(gone as unknown as Method)
+
+  const survives = (label: string, run: () => void): void => {
+    try {
+      run()
+      check(label, true)
+    } catch (err) {
+      check(label, false, err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  survives('guest: cancelling the Ctrl watcher on a pane being unmounted', () => cancelHold(dead))
+  survives('guest: cancelling a pick on a pane being unmounted', () => cancelPick(dead))
+  survives('guest: arming the picker on a guest that has gone', () => void pickElement(dead))
+  survives('guest: leaving a watcher in a guest that has gone', () => void holdPick(dead))
+
+  // And the promises they leave behind settle, rather than rejecting into
+  // nobody's hands — an unhandled rejection is the same crash one tick later.
+  check('guest: a pick on a dead guest is nothing picked', (await pickElement(dead)) === null)
+  check('guest: so is a hold on one', (await holdPick(dead)) === null)
+
+  // A page that navigates mid-pick rejects the evaluation instead; same answer.
+  const navigatedAway = view(() => Promise.reject(new Error('Script failed to execute')))
+  check('guest: a navigation mid-pick is nothing picked', (await pickElement(navigatedAway)) === null)
+
+  // The happy path still comes back, and still through the shape check — the
+  // guest is a web page, so what it returns is not to be taken on trust.
+  const picked = {
+    selector: 'div.total',
+    tag: 'div',
+    id: '',
+    classes: ['total'],
+    text: 'Total',
+    html: '<div class="total">Total</div>',
+    rect: { x: 1, y: 2, width: 3, height: 4 },
+    styles: {},
+    ancestors: [],
+    url: 'http://localhost:3000/'
+  }
+  const live = view(() => Promise.resolve(picked))
+  check('guest: a real pick comes back', (await pickElement(live))?.selector === 'div.total')
+  check(
+    'guest: and anything else the page returns does not',
+    (await pickElement(view(() => Promise.resolve({ selector: 'div' })))) === null
+  )
 }
 
 // ---------------------------------------------------------------------------

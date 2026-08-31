@@ -325,6 +325,39 @@ function pickerSource(
 }
 
 /**
+ * Every word this file says to a guest, said safely.
+ *
+ * `executeJavaScript` is not the async call it looks like. Like every
+ * `<webview>` method that reaches the guest, it starts by asking the element
+ * for the guest's id — and that *throws*, synchronously, whenever there is no
+ * guest to name: before the tag has attached, and again the moment the element
+ * leaves the document. The exception happens before there is a promise, so a
+ * `.catch()` hung off the call never sees it.
+ *
+ * Which is exactly the shape that took the window down. React runs a deleted
+ * component's effect cleanups *after* it has removed the node, so a browser
+ * pane being torn down was cancelling its Ctrl watcher against an element
+ * whose guest had already gone — and an exception in a cleanup is one React
+ * has nowhere to put. With no error boundary above it, it unmounts the root:
+ * every pane in the app replaced by an empty black window, a few seconds after
+ * closing one pane, which is the reopen window running out and taking the
+ * grid with it.
+ *
+ * So nothing here calls the element directly. An `async` function turns that
+ * synchronous throw back into a rejection, which is the thing the rest of this
+ * file already knew how to ignore.
+ */
+async function inject(view: WebviewElement, source: string): Promise<unknown> {
+  try {
+    return await view.executeJavaScript(source)
+  } catch {
+    // A navigation mid-pick, a guest that has gone, or a pane on its way out.
+    // None of them are errors: they are all "nothing was picked".
+    return null
+  }
+}
+
+/**
  * Put the page into pick mode and wait for a click.
  *
  * Resolves with null when the user pressed Escape, clicked away, or the page
@@ -332,15 +365,8 @@ function pickerSource(
  * them are errors.
  */
 export async function pickElement(view: WebviewElement): Promise<PickedElement | null> {
-  try {
-    const result = await view.executeJavaScript(
-      pickerSource(MAX_TEXT, MAX_HTML, STYLE_PROPS, false)
-    )
-    return isPicked(result) ? result : null
-  } catch {
-    // A navigation mid-pick rejects the evaluation; nothing was picked.
-    return null
-  }
+  const result = await inject(view, pickerSource(MAX_TEXT, MAX_HTML, STYLE_PROPS, false))
+  return isPicked(result) ? result : null
 }
 
 /**
@@ -356,32 +382,24 @@ export async function pickElement(view: WebviewElement): Promise<PickedElement |
  * asked for the page and got it.
  */
 export async function holdPick(view: WebviewElement): Promise<PickedElement | null> {
-  try {
-    const result = await view.executeJavaScript(
-      pickerSource(MAX_TEXT, MAX_HTML, STYLE_PROPS, true)
-    )
-    return isPicked(result) ? result : null
-  } catch {
-    return null
-  }
+  const result = await inject(view, pickerSource(MAX_TEXT, MAX_HTML, STYLE_PROPS, true))
+  return isPicked(result) ? result : null
 }
 
-/** Take the page back out of pick mode from the outside. */
+/**
+ * Take the page back out of pick mode from the outside.
+ *
+ * A page that is already gone is its own kind of cancelled, and so is a pane
+ * that is being unmounted as this is called — which is the ordinary case, not
+ * the exceptional one. See `inject`.
+ */
 export function cancelPick(view: WebviewElement): void {
-  void view
-    .executeJavaScript('window.__devlobbyPickCancel && window.__devlobbyPickCancel(), 0')
-    .catch(() => {
-      /* the page is gone, which is its own kind of cancelled */
-    })
+  void inject(view, 'window.__devlobbyPickCancel && window.__devlobbyPickCancel(), 0')
 }
 
 /** The same, for the Ctrl watcher — separately, so one cannot cancel the other. */
 export function cancelHold(view: WebviewElement): void {
-  void view
-    .executeJavaScript('window.__devlobbyHoldCancel && window.__devlobbyHoldCancel(), 0')
-    .catch(() => {
-      /* the page is gone, which is its own kind of cancelled */
-    })
+  void inject(view, 'window.__devlobbyHoldCancel && window.__devlobbyHoldCancel(), 0')
 }
 
 /**
