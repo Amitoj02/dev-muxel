@@ -10,8 +10,19 @@
 import { useRef } from 'react'
 import type { BrowserPane as BrowserPaneModel, GitState, Pane } from '../../../shared/types'
 import { hostLabel, viewportOf } from '../../../shared/browser'
+import { groupLabel, groupLabelIsBranch, isGroup } from '../../../shared/git'
 import type { PaneRuntime } from '../state/hooks'
-import { IconBranch, IconClose, IconGlobe, IconPlus, IconUnzoom, IconZoom } from './Icons'
+import { useHoverCard } from '../lib/useHoverCard'
+import {
+  IconBranch,
+  IconClose,
+  IconFolder,
+  IconGlobe,
+  IconPlus,
+  IconUnzoom,
+  IconZoom
+} from './Icons'
+import { RepoSummary } from './RepoSummary'
 
 export type PaneHeaderProps = {
   pane: Pane
@@ -78,7 +89,7 @@ export function PaneHeader(props: PaneHeaderProps): React.JSX.Element {
         {props.label}
       </span>
 
-      {pane.kind === 'terminal' && <GitChips git={git} />}
+      {pane.kind === 'terminal' && <GitChips git={git} label={props.label} />}
       {pane.kind === 'note' && <span className="note-status">{props.noteStatus}</span>}
       {pane.kind === 'browser' && <BrowserChips pane={pane} />}
 
@@ -161,9 +172,17 @@ function paneTitleAttr(pane: Pane): string | undefined {
 /**
  * The git readout. Order and wording are from the design: a dirty count as a
  * tinted chip, untracked as a neutral chip, then the ahead/behind pair.
+ *
+ * A folder of repositories draws the same chips off the same fields, because
+ * the state published for it is already the sum of the ones inside — see
+ * `shared/git.ts`. All that differs is the branch slot, which has a count to
+ * put there instead of a name, and where the detail lives: a work tree explains
+ * itself in a `title`, a folder needs a card to name what owes what.
  */
-function GitChips({ git }: { git: GitState | null }): React.JSX.Element | null {
+function GitChips({ git, label }: { git: GitState | null; label: string }): React.JSX.Element | null {
   if (!git) return null
+
+  if (isGroup(git)) return <FolderChips git={git} label={label} />
 
   if (git.error) {
     return <span className="chip chip--error">{git.error}</span>
@@ -183,11 +202,58 @@ function GitChips({ git }: { git: GitState | null }): React.JSX.Element | null {
         <IconBranch />
         {branch}
       </span>
+      <CountChips git={git} titles />
+    </>
+  )
+}
 
+/**
+ * A folder's readout: the same counts, summed, and a branch slot that says how
+ * many repositories they came from — or their branch, on the days they all
+ * happen to be on one.
+ *
+ * The whole readout is one hover target rather than one per chip, because one
+ * card explains all of it and three cards fighting over the same rectangle is
+ * not an improvement on none.
+ */
+function FolderChips({ git, label }: { git: GitState; label: string }): React.JSX.Element {
+  const card = useHoverCard()
+
+  // A folder that is missing, or that has nothing in it, has no breakdown to
+  // offer — it has a sentence, and that is the whole readout.
+  if (git.error) return <span className="chip chip--error">{git.error}</span>
+
+  return (
+    <span className="git-group" {...card.bind}>
+      <span className="pane-header__branch">
+        {groupLabelIsBranch(git) ? <IconBranch /> : <IconFolder size={11} />}
+        {groupLabel(git)}
+      </span>
+      <CountChips git={git} titles={false} />
+      {card.anchor && (
+        <RepoSummary git={git} name={label} anchorEl={card.anchor} onClose={card.close} />
+      )}
+    </span>
+  )
+}
+
+/**
+ * The counts, for one work tree or for a folder of them.
+ *
+ * `titles` is off for a folder: the numbers are sums, so "3 staged, 4 modified"
+ * would be true of no repository in particular, and a native tooltip appearing
+ * on top of the card that does explain it is worse than nothing.
+ */
+function CountChips({ git, titles }: { git: GitState; titles: boolean }): React.JSX.Element {
+  return (
+    <>
       {git.conflicted > 0 && <span className="chip chip--conflict">!{git.conflicted}</span>}
 
       {git.dirty > 0 ? (
-        <span className="chip chip--dirty" title={`${git.staged} staged, ${git.modified} modified`}>
+        <span
+          className="chip chip--dirty"
+          title={titles ? `${git.staged} staged, ${git.modified} modified` : undefined}
+        >
           ●{git.dirty}
         </span>
       ) : git.untracked === 0 ? (
@@ -195,13 +261,13 @@ function GitChips({ git }: { git: GitState | null }): React.JSX.Element | null {
       ) : null}
 
       {git.untracked > 0 && (
-        <span className="chip chip--new" title={`${git.untracked} untracked`}>
+        <span className="chip chip--new" title={titles ? `${git.untracked} untracked` : undefined}>
           +{git.untracked}
         </span>
       )}
 
       {(git.ahead > 0 || git.behind > 0 || git.upstream) && (
-        <span className="chip chip--sync" title="ahead / behind upstream">
+        <span className="chip chip--sync" title={titles ? 'ahead / behind upstream' : undefined}>
           ↑{git.ahead} ↓{git.behind}
         </span>
       )}

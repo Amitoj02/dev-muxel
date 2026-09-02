@@ -47,7 +47,16 @@ export function useFolderDrop(): void {
           }
           if (known.has(normalisePath(dir))) continue
 
-          const repo = actions.addRepo({ name: probe.name, path: dir })
+          // Dropping the directory your projects live in means the same thing
+          // as adding it from the panel does, so it is looked into the same way.
+          const inside =
+            !probe.isRepo && probe.isDirectory ? await window.devlobby.repo.scan(dir) : []
+
+          const repo = actions.addRepo({
+            name: probe.name,
+            path: dir,
+            scan: inside.length > 0 || undefined
+          })
           if (repo) {
             known.add(normalisePath(dir))
             added += 1

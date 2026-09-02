@@ -183,12 +183,7 @@ export function CommentsPanel({
             onClick={skill.install}
             title={skillTitle(skill.status)}
           >
-            <IconPlus size={10} />{' '}
-            {skill.busy
-              ? 'writing…'
-              : skill.status.installed
-                ? 'update the skill'
-                : 'add the skill'}
+            <IconPlus size={10} /> {skill.busy ? 'writing…' : skillLabel(skill.status)}
           </button>
         )}
 
@@ -291,9 +286,10 @@ export function CommentsPanel({
 /**
  * Names any pre-rename skill still on disk.
  *
- * There can be two — `/devmuxel-browser` and `/grid-browser`, from someone who
- * ran both and installed the skill from each — so this agrees with however many
- * there are rather than assuming one.
+ * There can be several — `/devmuxel-browser` and `/grid-browser`, from someone
+ * who ran both and installed the skill from each, and again for every Claude
+ * profile on the machine — so this agrees with however many there are rather
+ * than assuming one.
  */
 function staleSkills(dirs: string[]): string {
   if (dirs.length === 0) return ''
@@ -302,16 +298,48 @@ function staleSkills(dirs: string[]): string {
     : ` The pre-rename skill at ${dirs[0]} is not removed — delete it yourself.`
 }
 
+/** `a`, `b` and `c`, for a tooltip that has to name directories. */
+function list(parts: string[]): string {
+  if (parts.length < 2) return parts.join('')
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
 /**
  * What the install button says it will do, which depends on what is already
  * there — including a skill left behind by a rename, since that is the one case
  * where installing leaves the user with more slash commands than work.
+ *
+ * It names every profile it would write to, because on a machine with two
+ * Claude accounts "the skill is installed" is only ever true of one of them,
+ * and which one is the whole question.
  */
 function skillTitle(status: SkillStatus): string {
+  const pending = status.profiles.filter((profile) => !profile.current)
+  const dirs = list(pending.map((profile) => profile.dir))
   const stale = staleSkills(status.legacyDirs)
-  return status.installed
-    ? `Your /devlobby-browser skill was not written by this DevLobby. Replaces ${status.dir}.${stale}`
-    : `Write /devlobby-browser to ${status.dir}, so a Claude session can come and collect these.${stale}`
+  const others = status.profiles.length - pending.length
+  const rest =
+    others > 0
+      ? ` The ${others === 1 ? 'other profile has' : `other ${others} profiles have`} a current copy already.`
+      : ''
+
+  return pending.some((profile) => profile.installed)
+    ? `Your /devlobby-browser skill was not written by this DevLobby. Replaces ${dirs}.${rest}${stale}`
+    : `Write /devlobby-browser to ${dirs}, so a Claude session can come and collect these.${rest}${stale}`
+}
+
+/**
+ * `add the skill` while any profile is without it, `update the skill` only when
+ * every profile has a copy and the copies are not this build's.
+ */
+function skillLabel(status: SkillStatus): string {
+  return status.installed ? 'update the skill' : 'add the skill'
+}
+
+/** What the toast says once they are written. */
+function installed(dirs: string[], legacyDirs: string[]): string {
+  const where = dirs.length > 1 ? ` in ${dirs.length} Claude profiles` : ''
+  return `Skill installed${where} — run /devlobby-browser in a Claude session.${staleSkills(legacyDirs)}`
 }
 
 /**
@@ -320,6 +348,10 @@ function skillTitle(status: SkillStatus): string {
  * Asked for when the comments open rather than at startup, because this is the
  * only place the answer is worth anything — and because "is there a file in
  * your home directory" is not a question to ask on every launch.
+ *
+ * A failure to read it is reported rather than swallowed. The button is hidden
+ * while the status is unknown, so a rejected promise here would take the only
+ * way of installing the skill off the screen and say nothing about why.
  */
 function useSkill(): { status: SkillStatus | null; busy: boolean; install: () => void } {
   const [status, setStatus] = useState<SkillStatus | null>(null)
@@ -328,9 +360,17 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
 
   useEffect(() => {
     alive.current = true
-    void window.devlobby.skill.status().then((s) => {
-      if (alive.current) setStatus(s)
-    })
+    window.devlobby.skill
+      .status()
+      .then((s) => {
+        if (alive.current) setStatus(s)
+      })
+      .catch((err: unknown) => {
+        actions.toast(
+          `Could not tell whether the /devlobby-browser skill is installed — ${String(err)}`,
+          'error'
+        )
+      })
     return () => {
       alive.current = false
     }
@@ -341,17 +381,15 @@ function useSkill(): { status: SkillStatus | null; busy: boolean; install: () =>
     void window.devlobby.skill
       .install()
       .then(async (result) => {
+        // Even a failure may have written some of them, so the status is read
+        // back either way and the button goes on offering whatever is left.
+        const next = await window.devlobby.skill.status()
+        if (alive.current) setStatus(next)
         if (!result.ok) {
           actions.toast(`Could not write the skill — ${result.error}`, 'error')
           return
         }
-        const next = await window.devlobby.skill.status()
-        if (alive.current) setStatus(next)
-        actions.toast(
-          next.legacyDirs.length > 0
-            ? `Skill installed — run /devlobby-browser.${staleSkills(next.legacyDirs)}`
-            : 'Skill installed — run /devlobby-browser in a Claude session'
-        )
+        actions.toast(installed(result.dirs, next.legacyDirs))
       })
       .finally(() => {
         if (alive.current) setBusy(false)

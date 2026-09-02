@@ -19,8 +19,10 @@ import type {
   RepoScanResult,
   Settings,
   ShellProfile,
+  SkillInstallResult,
   SkillStatus,
-  ViewportId
+  ViewportId,
+  WatchedRepo
 } from '../shared/types'
 
 type Off = () => void
@@ -68,8 +70,7 @@ const api = {
   git: {
     refresh: (path?: string): Promise<void> => ipcRenderer.invoke(CH.gitRefresh, path),
     snapshot: (): Promise<Record<string, GitState>> => ipcRenderer.invoke(CH.gitSnapshot),
-    setRepos: (repos: Array<{ id: string; path: string }>): Promise<void> =>
-      ipcRenderer.invoke(CH.gitSetRepos, repos)
+    setRepos: (repos: WatchedRepo[]): Promise<void> => ipcRenderer.invoke(CH.gitSetRepos, repos)
   },
 
   dialog: {
@@ -78,7 +79,9 @@ const api = {
   },
 
   repo: {
-    scan: (root: string): Promise<RepoScanResult[]> => ipcRenderer.invoke(CH.repoScan, root),
+    /** Depth defaults to the same one `Scan folder` has always used. */
+    scan: (root: string, depth?: number): Promise<RepoScanResult[]> =>
+      ipcRenderer.invoke(CH.repoScan, root, depth),
     probe: (
       target: string
     ): Promise<{
@@ -159,8 +162,7 @@ const api = {
    */
   skill: {
     status: (): Promise<SkillStatus> => ipcRenderer.invoke(CH.skillStatus),
-    install: (): Promise<{ ok: true; dir: string } | { ok: false; error: string }> =>
-      ipcRenderer.invoke(CH.skillInstall)
+    install: (): Promise<SkillInstallResult> => ipcRenderer.invoke(CH.skillInstall)
   },
 
   window: {

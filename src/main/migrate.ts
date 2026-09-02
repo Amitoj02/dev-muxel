@@ -96,17 +96,16 @@ export function migrateProfile(oldDirs: readonly string[], newDir: string): void
 }
 
 /**
- * Where the browser skill was written under each earlier name.
+ * Where the browser skill was written under each earlier name, within one
+ * Claude profile.
  *
  * Installing `/devlobby-browser` does not remove them — this is inside the
  * user's `.claude` directory, which the app has no business deleting from — so
  * the comments bar offers to say they are there and what they are. A stale copy
  * is not harmful, just another slash command that talks to a bridge route the
- * app no longer serves. There can be two of them: someone who ran GRID, then
- * DevMuxel, and installed the skill from each.
+ * app no longer serves. There can be two of them per profile: someone who ran
+ * GRID, then DevMuxel, and installed the skill from each.
  */
-export function legacySkillDirs(homedir: string): string[] {
-  return ['devmuxel-browser', 'grid-browser'].map((slug) =>
-    path.join(homedir, '.claude', 'skills', slug)
-  )
+export function legacySkillDirs(configDir: string): string[] {
+  return ['devmuxel-browser', 'grid-browser'].map((slug) => path.join(configDir, 'skills', slug))
 }

@@ -39,7 +39,9 @@ import {
   VIEWPORT_ORDER
 } from '../src/shared/browser.ts'
 import type { NetEntry, NetLogState } from '../src/shared/browser.ts'
+import path from 'node:path'
 import { PopupGate } from '../src/main/browser/popups.ts'
+import { claudeDirsFrom } from '../src/main/browser/profiles.ts'
 import {
   cancelHold,
   cancelPick,
@@ -1205,6 +1207,41 @@ function respond(log: NetLogState, id: string, status = 500): NetEntry | null {
     'send: and the footer says what happens to bodies',
     pageOnly.includes('control characters removed')
   )
+}
+
+// ---------------------------------------------------------------------------
+// Claude profiles — where the skill has to be written
+// ---------------------------------------------------------------------------
+{
+  const home = path.resolve(path.join('C:', 'Users', 'me'))
+  const dot = (name: string): string => path.join(home, name)
+
+  const one = claudeDirsFrom(home, ['Documents', '.claude', 'Downloads'])
+  check('profiles: the default on its own', one.length === 1 && one[0] === dot('.claude'))
+
+  const two = claudeDirsFrom(home, ['.claude-work', '.claude', 'Documents'])
+  check(
+    'profiles: a second account beside it, default first',
+    two.length === 2 && two[0] === dot('.claude') && two[1] === dot('.claude-work')
+  )
+
+  const named = claudeDirsFrom(home, ['.claude'], dot('.claude-work'))
+  check(
+    'profiles: CLAUDE_CONFIG_DIR is taken even when nothing is beside it',
+    named.length === 2 && named[1] === dot('.claude-work')
+  )
+
+  const dupe = claudeDirsFrom(home, ['.claude', '.claude-work'], dot('.claude-work'))
+  check('profiles: named twice is still once', dupe.length === 2)
+
+  const json = claudeDirsFrom(home, ['.claude', '.claude.json', '.claudia'])
+  check(
+    'profiles: only .claude- prefixed neighbours count',
+    json.length === 1 && json[0] === dot('.claude')
+  )
+
+  const blank = claudeDirsFrom(home, ['.claude'], '   ')
+  check('profiles: an empty CLAUDE_CONFIG_DIR is not a profile', blank.length === 1)
 }
 
 // ---------------------------------------------------------------------------

@@ -107,6 +107,16 @@ export type Repo = {
   color?: string
   /** Where this project runs. A browser pane opened here starts on it. */
   devUrl?: string
+  /**
+   * Watch the repositories *inside* this folder rather than the folder itself.
+   *
+   * Set when the folder you declared turns out not to be a work tree but to
+   * have work trees in it, which is what a projects directory is. The state
+   * published for it is then the sum of theirs — see `shared/git.ts`.
+   */
+  scan?: boolean
+  /** Levels below the folder to look in. 1 is the folders directly inside it. */
+  scanDepth?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +165,13 @@ export type GitState = {
   error: string | null
   /** Wall-clock ms when this snapshot was produced. */
   at: number
+  /**
+   * The repositories found inside this folder, when `scan` is set on the repo
+   * that declared it. Present only for a folder, and when it is, **every count
+   * above is their sum** — which is what lets a header, a spine and a
+   * repository row go on reading one flat state.
+   */
+  members?: GitState[]
 }
 
 // ---------------------------------------------------------------------------
@@ -330,23 +347,60 @@ export type PtyDataEvent = {
  * Whether the `/devlobby-browser` skill is installed for the user, and whether
  * it is the one this build of DevLobby ships. A copy with no version stamp was
  * written by hand and counts as out of date — see `main/browser/skill.ts`.
+ *
+ * Asked and answered per Claude profile: a machine can carry several — the
+ * default `.claude` and a second account's `.claude-work` beside it — and a
+ * skill installed in one is not there for a session running out of the other.
  */
-export type SkillStatus = {
+export type SkillProfile = {
+  /** The configuration directory itself, so the UI can tell two apart. */
+  configDir: string
+  /** Where the skill is, or would go, so the UI can name it. */
+  dir: string
   installed: boolean
   version: number | null
   current: boolean
-  /** Where it is, or would go, so the UI can name it. */
-  dir: string
   /**
    * The pre-rename `/devmuxel-browser` and `/grid-browser` skills, whichever
-   * are still on disk. Named so the user can delete them; installing the new
-   * one does not touch them.
+   * are still in this profile. Named so the user can delete them; installing
+   * the new one does not touch them.
    */
   legacyDirs: string[]
 }
+
+export type SkillStatus = {
+  /** Every profile found, the default `.claude` first. Never empty. */
+  profiles: SkillProfile[]
+  /** Installed in every profile — though a copy may still be out of date. */
+  installed: boolean
+  /** Current in every profile: the install button has nothing left to do. */
+  current: boolean
+  /** Every pre-rename skill still on disk, across all of them. */
+  legacyDirs: string[]
+}
+
+/** What installing did, named by profile so the toast can say how many. */
+export type SkillInstallResult =
+  | { ok: true; dirs: string[] }
+  | { ok: false; error: string; dirs: string[] }
 
 export type RepoScanResult = {
   path: string
   name: string
   alreadyAdded: boolean
+}
+
+/**
+ * What the git watcher is told to follow.
+ *
+ * A subset of `Repo` rather than the whole thing: the watcher has no business
+ * with a repository's colour or its startup command, and the renderer pushes
+ * this list every time the paths change.
+ */
+export type WatchedRepo = {
+  id: string
+  path: string
+  /** Follow the repositories inside this folder instead of the folder itself. */
+  scan?: boolean
+  scanDepth?: number
 }

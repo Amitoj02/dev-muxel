@@ -10,7 +10,14 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from '
 import path from 'node:path'
 import os from 'node:os'
 import { CH, EV } from '../shared/ipc'
-import type { GitState, PersistedState, PtySpawnResult, Settings, ViewportId } from '../shared/types'
+import type {
+  GitState,
+  PersistedState,
+  PtySpawnResult,
+  Settings,
+  ViewportId,
+  WatchedRepo
+} from '../shared/types'
 import { BrowserBridge } from './browser/bridge'
 import { BrowserCapture, type CaptureStatus } from './browser/network'
 import { POPUP_SNOOZE_MS, type CommentBatch } from '../shared/browser'
@@ -23,6 +30,7 @@ import { buildMenu } from './menu'
 import { LEGACY_APP_NAMES, migrateProfile } from './migrate'
 import { GitWatcher } from './git/watcher'
 import { probeRepo, scanForRepos } from './git/status'
+import { clampDepth } from '../shared/git'
 import { editorAvailable, openInEditor, openInFileManager } from './integrations/editor'
 import { PtyManager } from './pty/manager'
 import { discoverShells, mergeShells, pickDefaultShell } from './pty/shells'
@@ -172,14 +180,16 @@ function registerIpc(): void {
 
   // --- git ---------------------------------------------------------------
 
+  // Asking by hand also walks every declared folder again. The timer leaves
+  // that to a slow backstop, so Refresh is how you say "I just cloned one".
   ipcMain.handle(CH.gitRefresh, async (_e, target?: string) => {
     if (target) await gitWatcher?.refreshOne(target)
-    else gitWatcher?.refreshAll()
+    else gitWatcher?.refreshAll(true)
   })
 
   ipcMain.handle(CH.gitSnapshot, (): Record<string, GitState> => gitWatcher?.snapshot() ?? {})
 
-  ipcMain.handle(CH.gitSetRepos, (_e, repos: Array<{ id: string; path: string }>) => {
+  ipcMain.handle(CH.gitSetRepos, (_e, repos: WatchedRepo[]) => {
     gitWatcher?.setRepos(repos)
   })
 
@@ -196,8 +206,8 @@ function registerIpc(): void {
     return path.normalize(result.filePaths[0])
   })
 
-  ipcMain.handle(CH.repoScan, async (_e, root: string) => {
-    const found = await scanForRepos(root)
+  ipcMain.handle(CH.repoScan, async (_e, root: string, depth?: number) => {
+    const found = await scanForRepos(root, clampDepth(depth))
     return found.map((p) => ({
       path: p,
       name: path.basename(p),
@@ -324,12 +334,20 @@ function registerIpc(): void {
 // ---------------------------------------------------------------------------
 
 function applyGitSettings(state: PersistedState): void {
-  gitWatcher?.setRepos(state.repos.map((r) => ({ id: r.id, path: r.path })))
+  gitWatcher?.setRepos(state.repos.map(watched))
+}
+
+/**
+ * The slice of a repository the watcher needs. `scan` is what turns a declared
+ * folder into the repositories inside it — see main/git/watcher.ts.
+ */
+function watched(r: PersistedState['repos'][number]): WatchedRepo {
+  return { id: r.id, path: r.path, scan: r.scan, scanDepth: r.scanDepth }
 }
 
 function rebuildGitWatcher(): void {
   const settings = store.get().settings
-  const repos = store.get().repos.map((r) => ({ id: r.id, path: r.path }))
+  const repos = store.get().repos.map(watched)
   gitWatcher?.dispose()
   // Carry the focus state across: a fresh watcher defaulting to "focused"
   // would quietly put a background window back on the 5s poll.

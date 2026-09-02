@@ -597,6 +597,19 @@ body {
   padding: 3px 0;
 }
 
+/*
+ * A folder's whole readout is one hover target, because one card explains all
+ * of it. The gap mirrors the header's own, so wrapping the chips changes
+ * nothing about where they sit or the order they give ground in.
+ */
+.git-group {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
 .pane-header__gap {
   flex: 1 1 auto;
   min-width: 0;
@@ -1057,6 +1070,160 @@ body {
   height: 1px;
   background: var(--line);
   margin: 4px 0;
+}
+
+/* ==========================================================================
+   The folder card
+   ========================================================================== */
+
+/*
+ * What each repository inside a declared folder owes, and the branch it is on.
+ *
+ * Fixed and portalled to <body>: `.pane` sets `container-type`, which makes it
+ * a containing block for fixed children, so a card rendered in place would
+ * anchor to the pane and be clipped by it. See RepoSummary.tsx.
+ *
+ * Above the overlay, unlike a menu, and for the opposite reason to the note on
+ * `.pmenu`: this cannot be interacted with and it hangs off something that may
+ * well be *inside* a dialog, so being under one would hide it entirely.
+ */
+.repo-card {
+  position: fixed;
+  z-index: 120;
+  max-width: 480px;
+  background: var(--bg-pane);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-dialog);
+  padding: 4px 0 5px;
+  animation: grid-fade 100ms ease;
+  /* Never takes a click: it overlaps the header it hangs off, and swallowing
+     one there would cost you the zoom button. */
+  pointer-events: none;
+}
+
+.repo-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 700 9px / 1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 9px 12px 8px;
+  min-width: 0;
+}
+
+.repo-card__where {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Four columns fixed for the whole card rather than laid out per row, which is
+ * the entire point of drawing this rather than filling in a `title`: the
+ * branch names line up under each other and the counts become a column you can
+ * run an eye down. The rows are `display: contents` so their cells belong to
+ * this grid.
+ */
+.repo-card__rows {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto auto;
+  align-items: baseline;
+}
+
+.repo-card__row {
+  display: contents;
+}
+
+.repo-card__row > * {
+  padding: 3px 0;
+}
+
+/* A clean repository is here to be counted, not read. */
+.repo-card__row[data-clean='true'] > * {
+  opacity: 0.55;
+}
+
+.repo-card__name {
+  font: 600 11.5px / 1.5 var(--font-ui);
+  color: var(--ink);
+  padding-left: 12px;
+  padding-right: 14px;
+  max-width: 24ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-card__branch {
+  font: 400 10.5px / 1.6 var(--font-mono);
+  color: var(--ink-muted);
+  padding-right: 14px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-card__branch[data-error] {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.repo-card__owed,
+.repo-card__sync {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  font: 500 10.5px / 1.6 var(--font-mono);
+  white-space: nowrap;
+}
+
+.repo-card__sync {
+  padding-right: 12px;
+  padding-left: 10px;
+  color: var(--ink-3);
+}
+
+.repo-card em {
+  font-style: normal;
+}
+
+.repo-card__dirty {
+  color: var(--red-light);
+}
+
+.repo-card__new {
+  color: var(--ink-3);
+}
+
+.repo-card__clean {
+  color: var(--green);
+}
+
+.repo-card__conflict {
+  color: #fff;
+  background: var(--red);
+  padding: 0 4px;
+}
+
+.repo-card__op {
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 9.5px;
+}
+
+.repo-card__more {
+  font: 400 10.5px / 1 var(--font-mono);
+  color: var(--ink-faint);
+  padding: 8px 12px 3px;
+  margin-top: 5px;
+  border-top: 1px solid var(--line);
 }
 
 /* ==========================================================================

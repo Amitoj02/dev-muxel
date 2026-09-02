@@ -65,6 +65,10 @@ leaves them alone.
 directory your projects live in and take them all at once. Dropping a folder
 anywhere on the window works too.
 
+Add a folder that is *not* a repository and DevLobby looks inside it. If there
+are repositories in there, it declares the folder as one row that adds them all
+up — see [A folder of repositories](#a-folder-of-repositories) below.
+
 <img src="docs/media/repositories.png" alt="The repositories panel: three projects with their branch, dirty count and upstream drift" width="100%">
 
 **2. Say what each one opens with.** The `⋯` button on a repository row opens
@@ -77,6 +81,7 @@ its settings:
 | **Colour** | tints the header of every terminal on this repository |
 | **Shell** | overrides the default shell for this repository |
 | **Where it runs** | a browser pane opened here starts on this URL |
+| **Repositories inside** | read this row as a folder of repositories, and how deep to look |
 
 **3. Open terminals.** `+` on a repository row, or `＋ Terminal` in the titlebar,
 which drops down the list of repositories so you can say which one — plus
@@ -128,6 +133,31 @@ shrinks — the name and the dirty count are the last to go.
 Give a repository a colour and every terminal opened on it wears that colour in
 its header, which is the fastest way to pick one project out of a wall of
 near-identical panes.
+
+### A folder of repositories
+
+Projects do not always sit one to a folder. Point DevLobby at the directory they
+live in, turn on `Repositories inside`, and that one row watches every
+repository under it — the header then reads exactly as it does for a single
+project, with the numbers summed:
+
+```
+projects   ⌂ 5 repos   !1  ●4  +3  ↑2 ↓1
+```
+
+Four uncommitted files and three new ones across the whole folder, two commits
+to push, one to pull, and one repository stuck in a merge. Where a project shows
+its branch, a folder shows how many repositories it counted — unless they all
+happen to be on the same branch, in which case it says so.
+
+Hover the readout and a card breaks it down, worst first: what each repository
+owes, and the branch it is on. Anything unreadable or half-merged comes to the
+top; the clean ones sink to the bottom and stop being listed once there are more
+than the card will hold.
+
+Adding a folder turns this on for you when the folder is not a repository and
+has repositories in it. `Repositories inside` in the row's settings is where you
+say otherwise, or look a level deeper. New clones show up on their own.
 
 ## When a pane needs you
 
@@ -225,11 +255,16 @@ will happily give you.
 ### Handing them to Claude
 
 The comments bar carries `add the skill` when the `/devlobby-browser` skill is
-missing from your machine, or `update the skill` when the copy you have was not
-written by this build of DevLobby. Press it and DevLobby writes both halves —
-the skill and the script it runs — into `~/.claude/skills/devlobby-browser/`.
-The button is gone once they match, because there is then nothing to do about
-it.
+missing, or `update the skill` when the copy you have was not written by this
+build of DevLobby. Press it and DevLobby writes both halves — the skill and the
+script it runs — into `~/.claude/skills/devlobby-browser/`. The button is gone
+once they match, because there is then nothing to do about it.
+
+If you run Claude under more than one account, every profile counts: `.claude`
+and any `.claude-…` beside it, plus whatever `CLAUDE_CONFIG_DIR` names. The
+button stays until all of them have a current copy and writes to the ones that
+do not, because a skill installed under one account is not there for a session
+running as the other. Hover it to see which directories it is about to write.
 
 In any Claude session, anywhere on the machine, run:
 
@@ -247,9 +282,9 @@ prefer — the send button is always there, and it says when a session is
 waiting. If no browser pane is open, the skill fails and says so rather than
 waiting for something that cannot happen.
 
-The skill lives in `~/.claude/skills/devlobby-browser/`, and ships with
-DevLobby in [`resources/skills/`](./resources/skills) so the two halves cannot
-drift apart. It finds DevLobby through a loopback port and token that DevLobby
+The skill lives in `skills/devlobby-browser/` inside each Claude profile, and
+ships with DevLobby in [`resources/skills/`](./resources/skills) so the two
+halves cannot drift apart. It finds DevLobby through a loopback port and token that DevLobby
 writes to `%APPDATA%\DevLobby\bridge.json` while it runs, so it works wherever
 DevLobby was started from — and stops working the moment DevLobby does.
 

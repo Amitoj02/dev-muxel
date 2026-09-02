@@ -216,7 +216,7 @@ function oldDirs(base: string): string[] {
 
 // --- 8. the legacy skill locations -------------------------------------------
 {
-  const dirs = legacySkillDirs('C:\\Users\\me')
+  const dirs = legacySkillDirs(path.join('C:\\Users\\me', '.claude'))
   const base = path.join('C:\\Users\\me', '.claude', 'skills')
   check(
     'legacy: names both pre-rename skill folders, newest first',

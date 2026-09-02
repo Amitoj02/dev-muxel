@@ -11,13 +11,17 @@
  * time, so the skill stays a real file in the repository — readable, greppable,
  * and copyable by hand for anyone who would rather not press a button — while
  * the packaged app carries it inside the asar with nothing to unpack.
+ *
+ * All of this happens once per Claude profile rather than once per machine:
+ * `profiles.ts` says why there can be more than one, and what it cost to
+ * assume there was only ever the one.
  */
 
 import { promises as fs } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-import type { SkillStatus } from '../../shared/types'
+import type { SkillInstallResult, SkillProfile, SkillStatus } from '../../shared/types'
 import { legacySkillDirs } from '../migrate'
+import { claudeDirs } from './profiles'
 import skillMarkdown from '../../../resources/skills/devlobby-browser/SKILL.md?raw'
 import skillScript from '../../../resources/skills/devlobby-browser/devlobby-browser.ps1?raw'
 
@@ -36,36 +40,64 @@ export const SKILL_VERSION = 3
 
 const STAMP = /<!--\s*devlobby-skill-version:\s*(\d+)\s*-->/
 
-/** Where Claude Code looks for a user-level skill. */
-export function skillDir(): string {
-  return path.join(os.homedir(), '.claude', 'skills', 'devlobby-browser')
+/** Where Claude Code looks for a user-level skill, inside one profile. */
+export function skillDir(configDir: string): string {
+  return path.join(configDir, 'skills', 'devlobby-browser')
 }
 
+/**
+ * The skill's state in every profile at once.
+ *
+ * `installed` and `current` hold only where they hold everywhere. The button
+ * exists so that `/devlobby-browser` works in whichever session the user runs
+ * it from, and a second profile without the skill is precisely the case that
+ * used to go unseen: the first profile answered for the machine, the bar found
+ * nothing to do, and the session that could not find the skill had no button to
+ * press.
+ */
 export async function skillStatus(): Promise<SkillStatus> {
-  const dir = skillDir()
-  const legacyDirs = await legacySkills()
+  const profiles = await Promise.all((await claudeDirs()).map(profileStatus))
+  return {
+    profiles,
+    installed: profiles.every((profile) => profile.installed),
+    current: profiles.every((profile) => profile.current),
+    legacyDirs: profiles.flatMap((profile) => profile.legacyDirs)
+  }
+}
+
+async function profileStatus(configDir: string): Promise<SkillProfile> {
+  const dir = skillDir(configDir)
+  const legacyDirs = await legacySkills(configDir)
   try {
     const body = await fs.readFile(path.join(dir, 'SKILL.md'), 'utf8')
     const found = STAMP.exec(body)
     const version = found ? Number(found[1]) : null
-    return { installed: true, version, current: version === SKILL_VERSION, dir, legacyDirs }
+    const current = version === SKILL_VERSION
+    return { configDir, dir, installed: true, version, current, legacyDirs }
   } catch {
-    return { installed: false, version: null, current: false, dir, legacyDirs }
+    return {
+      configDir,
+      dir,
+      installed: false,
+      version: null,
+      current: false,
+      legacyDirs
+    }
   }
 }
 
 /**
  * The pre-rename `/devmuxel-browser` and `/grid-browser` skills, whichever of
- * them the user still has.
+ * them this profile still has.
  *
  * Reported rather than deleted: this is inside their `.claude` directory, and
  * an app that quietly removes files from there is not one you would trust with
  * the rest. Leaving them costs a slash command apiece that no longer works, so
  * they are worth naming — once, in the tooltip that is already about the skill.
  */
-async function legacySkills(): Promise<string[]> {
+async function legacySkills(configDir: string): Promise<string[]> {
   const found: string[] = []
-  for (const dir of legacySkillDirs(os.homedir())) {
+  for (const dir of legacySkillDirs(configDir)) {
     try {
       await fs.access(path.join(dir, 'SKILL.md'))
       found.push(dir)
@@ -77,31 +109,48 @@ async function legacySkills(): Promise<string[]> {
 }
 
 /**
- * Write both halves out, overwriting whatever is there.
+ * Write both halves into every profile that has not already got a current copy.
  *
  * Only ever reached from a button the user pressed, which is why it is allowed
  * to overwrite: the two files are one unit, and installing half of a newer
- * skill next to half of an older one is the failure this exists to avoid.
+ * skill next to half of an older one is the failure this exists to avoid. A
+ * profile that is already current is passed over, so the button never rewrites
+ * a file it has no reason to touch.
+ *
+ * One profile failing does not stop the rest, and what did get written is
+ * reported alongside the error: installed in one account out of two is a better
+ * place to be left than installed in neither, and the status that follows will
+ * say which is which.
  */
-export async function installSkill(): Promise<
-  { ok: true; dir: string } | { ok: false; error: string }
-> {
-  const dir = skillDir()
-  try {
-    await fs.mkdir(dir, { recursive: true })
-    // Endings are normalised rather than inherited: what `?raw` carries depends
-    // on how the repository happened to be checked out, and a PowerShell script
-    // that reaches a machine with bare LFs is a needless thing to debug.
-    await fs.writeFile(path.join(dir, 'SKILL.md'), lineEndings(skillMarkdown, '\n'), 'utf8')
-    await fs.writeFile(
-      path.join(dir, 'devlobby-browser.ps1'),
-      lineEndings(skillScript, '\r\n'),
-      'utf8'
-    )
-    return { ok: true, dir }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+export async function installSkill(): Promise<SkillInstallResult> {
+  const status = await skillStatus()
+  const dirs: string[] = []
+  let error: string | null = null
+
+  for (const profile of status.profiles) {
+    if (profile.current) continue
+    try {
+      await writeSkill(profile.dir)
+      dirs.push(profile.dir)
+    } catch (err) {
+      error ??= err instanceof Error ? err.message : String(err)
+    }
   }
+
+  return error === null ? { ok: true, dirs } : { ok: false, error, dirs }
+}
+
+async function writeSkill(dir: string): Promise<void> {
+  await fs.mkdir(dir, { recursive: true })
+  // Endings are normalised rather than inherited: what `?raw` carries depends
+  // on how the repository happened to be checked out, and a PowerShell script
+  // that reaches a machine with bare LFs is a needless thing to debug.
+  await fs.writeFile(path.join(dir, 'SKILL.md'), lineEndings(skillMarkdown, '\n'), 'utf8')
+  await fs.writeFile(
+    path.join(dir, 'devlobby-browser.ps1'),
+    lineEndings(skillScript, '\r\n'),
+    'utf8'
+  )
 }
 
 function lineEndings(text: string, eol: string): string {

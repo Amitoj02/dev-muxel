@@ -60,8 +60,18 @@ cd ..
 # --- plain-folder: not a repo at all ---------------------------------------
 mkdir -p plain-folder && echo hello > plain-folder/notes.txt
 
+# --- nest/inner: one level further down, for the folder depth control ------
+# The fixture root is itself the shape a declared *folder* has, so this is
+# what makes depth 1 and depth 2 give different answers for it.
+mkdir -p nest
+git clone -q remote.git nest/inner
+cd nest/inner
+git checkout -qb spur
+echo nested > n.txt && git add . && git commit -qm "nested"
+cd ../..
+
 echo "--- fixtures built ---"
-for d in atlas-api ledger-cli mercury-web conflicted; do
+for d in atlas-api ledger-cli mercury-web conflicted nest/inner; do
   echo "== $d"
   git -C "$d" --no-optional-locks status --porcelain=v2 --branch --untracked-files=all | head -8
 done

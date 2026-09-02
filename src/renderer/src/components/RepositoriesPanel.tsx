@@ -11,6 +11,13 @@
 import { useMemo, useState } from 'react'
 import type { GitState, Repo } from '../../../shared/types'
 import {
+  clampDepth,
+  groupLabel,
+  isGroup,
+  MAX_SCAN_DEPTH,
+  MIN_SCAN_DEPTH
+} from '../../../shared/git'
+import {
   IconClose,
   IconFolder,
   IconGlobe,
@@ -20,7 +27,9 @@ import {
   IconTrash
 } from './Icons'
 import { Overlay } from './Overlay'
+import { RepoSummary } from './RepoSummary'
 import { accentOf, REPO_COLOURS } from '../lib/colour'
+import { useHoverCard } from '../lib/useHoverCard'
 import { actions, normalisePath, useApp } from '../state/hooks'
 
 export function RepositoriesPanel(): React.JSX.Element {
@@ -31,16 +40,34 @@ export function RepositoriesPanel(): React.JSX.Element {
     null
   )
 
+  /**
+   * Add one folder.
+   *
+   * A folder that is not a work tree is very often the folder your work trees
+   * live in, so that case is looked into rather than shrugged at: if there are
+   * repositories inside, the row is declared as a folder and starts adding
+   * them up. The toggle in its settings is there to say otherwise.
+   */
   const addFolder = async (): Promise<void> => {
     const picked = await window.devlobby.dialog.pickFolder('Add a repository')
     if (!picked) return
     const probe = await window.devlobby.repo.probe(picked)
+
+    const inside =
+      !probe.isRepo && probe.isDirectory ? await window.devlobby.repo.scan(picked) : []
+
     const repo = actions.addRepo({
       name: probe.name,
-      path: probe.root ?? picked
+      path: probe.root ?? picked,
+      scan: inside.length > 0 || undefined
     })
     if (repo) setEditing(repo.id)
-    if (!probe.isRepo) {
+
+    if (inside.length > 0) {
+      actions.toast(
+        `Not a repository itself — watching the ${inside.length} inside it`
+      )
+    } else if (!probe.isRepo) {
       actions.toast('That folder is not a git repository — added anyway', 'info')
     }
   }
@@ -182,28 +209,7 @@ function RepoRow({
           </span>
         </div>
 
-        <div className="repo-row__git">
-          {git?.error ? (
-            <span style={{ color: 'var(--ink-dim)' }}>{git.error}</span>
-          ) : git?.isRepo ? (
-            <>
-              <span style={{ color: 'var(--ink-muted)' }}>
-                {git.detached ? `detached ${git.head}` : (git.branch ?? '—')}
-              </span>
-              {git.dirty > 0 ? (
-                <span style={{ color: 'var(--red-light)' }}>●{git.dirty}</span>
-              ) : (
-                <span style={{ color: 'var(--green)' }}>clean</span>
-              )}
-              {git.untracked > 0 && <span>+{git.untracked}</span>}
-              <span>
-                ↑{git.ahead} ↓{git.behind}
-              </span>
-            </>
-          ) : (
-            <span style={{ color: 'var(--ink-dim)' }}>no git</span>
-          )}
-        </div>
+        <RepoRowGit git={git} name={repo.name} />
 
         <div className="repo-row__actions">
           <button
@@ -328,6 +334,8 @@ function RepoRow({
             </span>
           </div>
 
+          <ScanField repo={repo} git={git} />
+
           <label className="field" style={{ gridColumn: '1 / -1' }}>
             <span className="field__label">Command on open</span>
             <input
@@ -366,6 +374,134 @@ function RepoRow({
           </label>
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * A row's git readout.
+ *
+ * A declared folder reads exactly like a repository does, because the state
+ * published for it is already the sum of the ones inside — the branch is the
+ * one place there is nothing to put, so it says how many were counted instead
+ * and the card names them.
+ */
+function RepoRowGit({ git, name }: { git: GitState | null; name: string }): React.JSX.Element {
+  const card = useHoverCard()
+
+  if (git?.error) {
+    return (
+      <div className="repo-row__git">
+        <span style={{ color: 'var(--ink-dim)' }}>{git.error}</span>
+      </div>
+    )
+  }
+
+  if (isGroup(git)) {
+    return (
+      <div className="repo-row__git" {...card.bind}>
+        <span style={{ color: 'var(--ink-muted)' }}>{groupLabel(git)}</span>
+        {git.dirty > 0 ? (
+          <span style={{ color: 'var(--red-light)' }}>●{git.dirty}</span>
+        ) : (
+          <span style={{ color: 'var(--green)' }}>clean</span>
+        )}
+        {git.untracked > 0 && <span>+{git.untracked}</span>}
+        <span>
+          ↑{git.ahead} ↓{git.behind}
+        </span>
+        {card.anchor && (
+          <RepoSummary git={git} name={name} anchorEl={card.anchor} onClose={card.close} />
+        )}
+      </div>
+    )
+  }
+
+  if (!git?.isRepo) {
+    return (
+      <div className="repo-row__git">
+        <span style={{ color: 'var(--ink-dim)' }}>no git</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="repo-row__git">
+      <span style={{ color: 'var(--ink-muted)' }}>
+        {git.detached ? `detached ${git.head}` : (git.branch ?? '—')}
+      </span>
+      {git.dirty > 0 ? (
+        <span style={{ color: 'var(--red-light)' }}>●{git.dirty}</span>
+      ) : (
+        <span style={{ color: 'var(--green)' }}>clean</span>
+      )}
+      {git.untracked > 0 && <span>+{git.untracked}</span>}
+      <span>
+        ↑{git.ahead} ↓{git.behind}
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+
+const DEPTH_LABELS = ['', 'One level down', 'Two levels down', 'Three levels down']
+
+/**
+ * Whether this row is a repository or the folder your repositories live in.
+ *
+ * The one setting here that changes what the row *is* rather than how it
+ * behaves, which is why it says what it found: a folder watching six things is
+ * obvious from the count, and a folder watching none is a depth that wants
+ * turning up — or a path that was never the right one.
+ */
+function ScanField({ repo, git }: { repo: Repo; git: GitState | null }): React.JSX.Element {
+  const depth = clampDepth(repo.scanDepth)
+  const found = isGroup(git) ? git.members.length : null
+
+  return (
+    <div className="field" style={{ gridColumn: '1 / -1' }}>
+      <span className="field__label">Repositories inside</span>
+
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={Boolean(repo.scan)}
+          onChange={(e) =>
+            actions.updateRepo(repo.id, { scan: e.target.checked || undefined })
+          }
+        />
+        Add up the repositories inside this folder, rather than reading it as one
+      </label>
+
+      {repo.scan && (
+        <select
+          className="select"
+          value={depth}
+          onChange={(e) => actions.updateRepo(repo.id, { scanDepth: Number(e.target.value) })}
+          aria-label="How deep to look"
+        >
+          {DEPTH_LABELS.map((label, level) =>
+            level < MIN_SCAN_DEPTH || level > MAX_SCAN_DEPTH ? null : (
+              <option key={level} value={level}>
+                {label}
+              </option>
+            )
+          )}
+        </select>
+      )}
+
+      <span className="field__hint">
+        {!repo.scan
+          ? 'For a folder your projects live in rather than a project of its own.'
+          : found === null
+            ? 'Looking…'
+            : found === 0
+              ? 'Nothing found. Try looking a level deeper.'
+              : `${found} found. The header of a terminal opened here shows their total; hover it for the breakdown.`}
+      </span>
     </div>
   )
 }

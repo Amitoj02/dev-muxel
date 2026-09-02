@@ -21,8 +21,9 @@ which is handy on machines where Smart App Control blocks the packaged exe.
 ## How it is put together
 
 ```
-src/shared/     types, the IPC channel list, the pure layout engine, and the
-                pure half of the browser pane (browser.ts, claude.ts)
+src/shared/     types, the IPC channel list, the pure layout engine, the
+                folder-summing git helpers (git.ts), and the pure half of the
+                browser pane (browser.ts, claude.ts)
 resources/      the /devlobby-browser skill, shipped with the app and
                 inlined into the main bundle with `?raw`
 src/main/       ptys, git, the filesystem, the window, menu accelerators, and
@@ -106,6 +107,27 @@ create index.lock` — and zero with the flag. Repos are also watched with
 `fs.watch` on `.git`, so switching a branch shows up immediately rather than at
 the next poll.
 
+**A declared path may be a folder of repositories, and it still publishes one
+`GitState`.** `Repo.scan` says the row is the directory your projects live in
+rather than a project; the watcher then finds the work trees under it, polls
+each one, and publishes their **sum** under the folder's own path with the
+states it summed carried along in `members`. Everything downstream — the
+header's chips, the spine colour, the repository row — goes on reading one flat
+state and needs no idea any of this happened. Only the branch slot differs,
+because a folder has a count to put there rather than a name.
+
+`GitWatcher` therefore holds two maps: `units`, every work tree actually polled
+(declared directly, found inside a folder, or both), and `groups`, the folders
+and the units each one sums. Reading a unit publishes it if it was declared and
+re-sums every folder counting it in. Watch the cost if you touch this — thirty
+repositories in a folder is thirty `git status` calls and thirty watch handles.
+Three things hold it down and all three matter: `MAX_GROUP_MEMBERS` caps the
+membership, members poll on a floor of their own rather than the window's
+interval (their `.git` watches keep them responsive without it), and that floor
+is jittered per path so they do not all come due on the same tick for the rest
+of the session. The summing itself is pure and lives in `src/shared/git.ts`,
+covered by `npm run check:git`.
+
 **A browser pane is a `<webview>` element, not a `WebContentsView`.** The
 main-process view was the obvious choice and is the wrong one here: it is
 composited *above* the page, so it would cover the zoom scrim, the drop
@@ -180,10 +202,13 @@ dialog, and it is what everything unproven falls back to.
 `npm run check:browser` asserts the sanitising and the one-line form.
 
 The far end of that bridge — the skill itself — ships in `resources/skills/`
-and is written into `~/.claude/skills/` by a button in the comments bar. Both
-halves are one protocol, so they live in one repository and the skill stamps
-the version that wrote it; a copy without that stamp was written by hand and
-counts as out of date. `src/main/browser/skill.ts` imports the two files with
+and is written into `skills/` inside every Claude profile on the machine by a
+button in the comments bar. Both halves are one protocol, so they live in one
+repository and the skill stamps the version that wrote it; a copy without that
+stamp was written by hand and counts as out of date. `profiles.ts` is what
+finds the profiles, and exists because looking only in `~/.claude` hid the
+button on a machine with two Claude accounts — the first profile answered for
+the machine, so the second could never be installed into. `src/main/browser/skill.ts` imports the two files with
 `?raw`, which inlines them at build time — so they stay real files a human can
 read and copy, and there is nothing to unpack out of the asar at runtime.
 
@@ -198,7 +223,7 @@ of locking up the window.
 ```bash
 npm run typecheck     # main+preload and renderer, separately
 npm run lint
-npm run fixtures:git  # builds .git-fixtures/ — dirty, clean, behind, conflicted
+npm run fixtures:git  # builds .git-fixtures/ — dirty, clean, behind, conflicted, nested
 npm run check         # layout engine + git parser + browser pane + migration
 ```
 
@@ -223,6 +248,17 @@ each other's *types* only. Type stripping erases a type import but would have to
 resolve a value one, and a bare extensionless specifier does not resolve under
 Node's ESM loader. If you add a value import between shared modules, the check
 script stops running.
+
+There is exactly one place that needs a value import anyway — `git/status.ts`
+takes `emptyState` from `src/shared/git.ts` — and it names the file with its
+`.ts` extension, which is the only import in `src/` that carries one.
+`allowImportingTsExtensions` in `tsconfig.node.json` is what lets tsc read it.
+Do the same if you need another, rather than duplicating the thing to avoid it.
+
+`check-git.mts` also sets `GIT_CEILING_DIRECTORIES` to the fixture root. The
+fixtures live inside DevLobby's own work tree, so without it `plain-folder` —
+the fixture whose entire job is to not be a repository — resolves to DevLobby
+itself and asserts against whatever you happen to have uncommitted.
 
 Please keep new behaviour covered by one of those three, and keep comments
 explaining *why* rather than *what* — that is the house style throughout.

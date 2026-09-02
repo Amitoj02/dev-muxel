@@ -5,6 +5,7 @@
     "lib": ["ES2023"],
     "module": "CommonJS",
     "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
     "types": ["node", "electron-vite/node"],
     "strict": true,
     "noUnusedLocals": true,

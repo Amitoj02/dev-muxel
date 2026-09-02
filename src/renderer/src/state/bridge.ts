@@ -9,7 +9,7 @@
  * a forced restart should cost you nothing, and the write is a few kilobytes.
  */
 
-import type { PersistedState } from '../../../shared/types'
+import type { PersistedState, Repo, WatchedRepo } from '../../../shared/types'
 import { actions, attentionCount, getState, isParked, subscribe, tabOfPane } from './store'
 import { hydrate, toPersisted } from './store'
 import { getSession } from '../terminal/session'
@@ -26,6 +26,11 @@ import {
 
 const SAVE_DEBOUNCE_MS = 500
 
+/** The slice of a repository the watcher follows. */
+function watched(r: Repo): WatchedRepo {
+  return { id: r.id, path: r.path, scan: r.scan, scanDepth: r.scanDepth }
+}
+
 export async function connect(): Promise<void> {
   const { state, shells, buildNumber } = await window.devlobby.state.load()
   hydrate(state, shells, buildNumber)
@@ -40,7 +45,7 @@ export async function connect(): Promise<void> {
 
   // Tell the watcher which paths to follow before the first paint, so headers
   // are populated by the time the panes appear.
-  await window.devlobby.git.setRepos(getState().repos.map((r) => ({ id: r.id, path: r.path })))
+  await window.devlobby.git.setRepos(getState().repos.map(watched))
   const snapshot = await window.devlobby.git.snapshot()
   actions.setGitSnapshot(snapshot)
 
@@ -208,10 +213,14 @@ function wirePersistence(): void {
 
     // Repo list changes have to reach the git watcher too, but only when the
     // paths actually changed — not on every layout nudge.
-    const repoKey = state.repos.map((r) => `${r.id}:${r.path}`).join('|')
+    // Not just the paths: turning `scan` on, or looking one level deeper,
+    // changes which repositories the watcher follows just as much as adding one.
+    const repoKey = state.repos
+      .map((r) => `${r.id}:${r.path}:${r.scan ? 1 : 0}:${r.scanDepth ?? ''}`)
+      .join('|')
     if (repoKey !== lastRepoKey) {
       lastRepoKey = repoKey
-      void window.devlobby.git.setRepos(state.repos.map((r) => ({ id: r.id, path: r.path })))
+      void window.devlobby.git.setRepos(state.repos.map(watched))
     }
   }
 

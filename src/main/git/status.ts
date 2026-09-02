@@ -17,6 +17,20 @@ import { execFile } from 'node:child_process'
 import { promises as fs, statSync } from 'node:fs'
 import path from 'node:path'
 import type { GitState } from '../../shared/types'
+/*
+ * The `.ts` is load-bearing, and the only import in `src/` that carries one.
+ * `npm run check:git` runs this file through Node's type stripping rather than
+ * a bundler, and Node's ESM resolver does not guess at extensions — so a
+ * *runtime* import of another source file has to name it exactly. Type-only
+ * imports are erased before Node sees them, which is why the line above needs
+ * nothing. `allowImportingTsExtensions` in tsconfig.node.json is what lets tsc
+ * read it too.
+ */
+import { emptyState } from '../../shared/git.ts'
+
+// Re-exported so a caller reading a repository does not need to know that the
+// empty value is pure and lives with the folder-summing helpers.
+export { emptyState }
 
 /** Untracked files are counted, not listed; stop counting past this. */
 const UNTRACKED_CAP = 10_000
@@ -24,28 +38,6 @@ const UNTRACKED_CAP = 10_000
 const EXEC_TIMEOUT_MS = 15_000
 /** A very dirty repo produces ~500KB; git is killed rather than buffering forever. */
 const MAX_BUFFER = 64 * 1024 * 1024
-
-export function emptyState(repoPath: string, error: string | null = null): GitState {
-  return {
-    path: repoPath,
-    isRepo: false,
-    branch: null,
-    head: null,
-    detached: false,
-    unborn: false,
-    upstream: null,
-    ahead: 0,
-    behind: 0,
-    staged: 0,
-    modified: 0,
-    untracked: 0,
-    conflicted: 0,
-    dirty: 0,
-    operation: null,
-    error,
-    at: Date.now()
-  }
-}
 
 type RunResult = { stdout: string; stderr: string; code: number; errno: string | null }
 
@@ -397,16 +389,22 @@ export async function readGitState(repoPath: string): Promise<GitState> {
 }
 
 /**
- * Directories under `root` that look like git repositories. Used by "Scan
- * folder" in the repository manager, which is how you declare a projects
- * directory in one go rather than one repo at a time.
+ * Directories under `root` that look like git repositories.
+ *
+ * Two callers, and they want the same walk for different reasons. "Scan
+ * folder" in the repository manager runs it once, to declare a projects
+ * directory in one go rather than one repo at a time. The watcher runs it
+ * repeatedly, to keep a declared folder's membership up to date — which is why
+ * it takes a `limit`: a folder is a budget of `git status` calls and `fs.watch`
+ * handles, and the walk should stop at it rather than the caller trimming
+ * afterwards.
  */
-export async function scanForRepos(root: string, depth = 2): Promise<string[]> {
+export async function scanForRepos(root: string, depth = 2, limit = 500): Promise<string[]> {
   const found: string[] = []
   const seen = new Set<string>()
 
   const walk = async (dir: string, level: number): Promise<void> => {
-    if (level > depth || found.length > 500) return
+    if (level > depth || found.length >= limit) return
     let entries: import('node:fs').Dirent[]
     try {
       entries = await fs.readdir(dir, { withFileTypes: true })
@@ -434,5 +432,7 @@ export async function scanForRepos(root: string, depth = 2): Promise<string[]> {
 
   await walk(path.resolve(root), 0)
   found.sort((a, b) => a.localeCompare(b))
-  return found
+  // The walk fans out with Promise.all, so it can overshoot the limit inside
+  // one directory before the guard above is next read.
+  return found.slice(0, limit)
 }

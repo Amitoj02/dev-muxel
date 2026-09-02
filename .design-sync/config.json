@@ -48,6 +48,7 @@
     "Overlay": "src/renderer/src/components/Overlay.tsx",
     "PaneHeader": "src/renderer/src/components/PaneHeader.tsx",
     "PaneShell": "src/renderer/src/components/PaneShell.tsx",
+    "RepoSummary": "src/renderer/src/components/RepoSummary.tsx",
     "RepositoriesPanel": "src/renderer/src/components/RepositoriesPanel.tsx",
     "SendToClaude": "src/renderer/src/components/SendToClaude.tsx",
     "SettingsPanel": "src/renderer/src/components/SettingsPanel.tsx",
@@ -127,6 +128,10 @@
     "Toast": {
       "cardMode": "single",
       "primaryStory": "Error"
+    },
+    "RepoSummary": {
+      "cardMode": "single",
+      "primaryStory": "Default"
     }
   },
   "dtsPropsFor": {
