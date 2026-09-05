@@ -333,6 +333,9 @@ function SearchBar({
  * Shortcuts that must work while a terminal has focus. Everything here is
  * Ctrl+Shift or Ctrl+Alt so it can never collide with what the CLI wants —
  * Claude and friends own the plain Ctrl range.
+ *
+ * Returns whether the key was taken. The session cancels the browser's default
+ * for the ones that were, which for Ctrl+Shift+V is a paste of its own.
  */
 function handleTerminalShortcut(
   paneId: string,

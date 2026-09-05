@@ -54,7 +54,11 @@ export type SessionCallbacks = {
    * which is a CLI exiting back to its shell.
    */
   onShellBack: () => void
-  /** A DevLobby shortcut was pressed in the terminal; the app handles it. */
+  /**
+   * A DevLobby shortcut was pressed in the terminal; the app handles it. True
+   * means it took the key, which is also the signal to cancel the browser's own
+   * default for that chord.
+   */
   onShortcut: (e: KeyboardEvent) => boolean
 }
 
@@ -251,13 +255,21 @@ export class TerminalSession {
     // stopPropagation() and stop the shortcut ever reaching the window.
     // Everything else belongs to whatever is running in the pane — including
     // Escape, which Claude and every TUI need.
+    //
+    // Bailing out that early skips xterm's preventDefault() as well, so the
+    // *browser's* default for the chord still runs — and Chromium's default for
+    // Ctrl+Shift+V is a paste, which xterm picks up through the DOM paste
+    // listener it keeps on its own textarea. That is how xterm pastes at all;
+    // it has no paste binding of its own. So a chord handled here has to cancel
+    // its default, or DevLobby's paste and the browser's both land and the CLI
+    // reads the clipboard twice.
     this.term.attachCustomKeyEventHandler((e) => {
       if (e.type !== 'keydown') return true
       const chord = classifyChord(e)
       if (chord === null) return true
       // Ctrl+Shift acts on this specific terminal, so it is handled here where
       // the session is in scope; the rest bubbles to the app-level handler.
-      if (chord === 'ctrl-shift') this.cb.onShortcut(e)
+      if (chord === 'ctrl-shift' && this.cb.onShortcut(e)) e.preventDefault()
       return false
     })
 
